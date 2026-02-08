@@ -13,7 +13,7 @@ db_logger = logging.getLogger('database')
 # === ЮКАССА КОНФИГ ===
 YOOKASSA_SHOP_ID = "1237681"
 YOOKASSA_SECRET_KEY = "live_-Qdq_6lyDp0c1ck5HkZ_xLw5ZFtO5s7oyJquVI7hweA"
-YOOKASSA_RETURN_URL = "https://t.me/SVS_365_bot"
+YOOKASSA_RETURN_URL = "https://t.me/RM_companies_bot"
 YOOKASSA_WEBHOOK_URL = "https://svs365bot.ru/webhook/yookassa"
 YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments"
 
@@ -2785,58 +2785,127 @@ def mark_notification_sent(user_id, notification_id, day_num=None):
     conn.close()
 
 def save_payment(user_id, company_arc_id, amount, yookassa_id, status='pending'):
-    """Сохраняет платеж за доступ к тренингу компании"""
+    """Сохраняет платеж за доступ к тренингу компании - С ПОЛНОЙ ОТЛАДКОЙ"""
     import logging
     logger = logging.getLogger(__name__)
     
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
+    print(f"🔍 DEBUG save_payment ВХОД:")
+    print(f"  user_id={user_id}")
+    print(f"  company_arc_id={company_arc_id}")
+    print(f"  amount={amount}")
+    print(f"  yookassa_id={yookassa_id}")
+    print(f"  status={status}")
     
+    conn = None
     try:
-        # Проверяем существует ли таблица с правильной структурой
-        cursor.execute("PRAGMA table_info(payments)")
-        columns = cursor.fetchall()
-        column_names = [col[1] for col in columns]
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
         
-        # Если таблица имеет старую структуру - создаем новую
-        if 'company_arc_id' not in column_names:
-            logger.warning("Таблица payments имеет старую структуру, пересоздаем...")
-            cursor.execute("DROP TABLE IF EXISTS payments")
+        print(f"🔍 DEBUG: Проверяем структуру таблицы payments...")
+        
+        # Проверяем существует ли таблица
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'")
+        if not cursor.fetchone():
+            print(f"❌ DEBUG: Таблица payments не существует! Создаем...")
             cursor.execute('''
                 CREATE TABLE payments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    company_arc_id INTEGER NOT NULL,  # ★ ИЗМЕНИЛИ: arc_id → company_arc_id ★
+                    company_arc_id INTEGER NOT NULL,
                     amount REAL NOT NULL,
                     status TEXT DEFAULT 'pending',
                     yookassa_payment_id TEXT UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
-                    metadata TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id),
-                    FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
+                    metadata TEXT
                 )
             ''')
             conn.commit()
-            logger.info("✅ Таблица payments пересоздана с поддержкой компаний")
+            print(f"✅ DEBUG: Таблица payments создана")
         
-        # Сохраняем платеж
-        cursor.execute('''
-            INSERT INTO payments (user_id, company_arc_id, amount, status, yookassa_payment_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, company_arc_id, amount, status, yookassa_id))
+        # Проверяем колонки
+        cursor.execute("PRAGMA table_info(payments)")
+        columns = cursor.fetchall()
+        print(f"🔍 DEBUG: Колонки таблицы payments ({len(columns)}):")
+        for col in columns:
+            print(f"  - {col[1]} ({col[2]}) {'NOT NULL' if col[3] else ''}")
+        
+        # Проверяем нет ли уже такого платежа
+        cursor.execute("SELECT id FROM payments WHERE yookassa_payment_id = ?", (yookassa_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            print(f"⚠️ DEBUG: Платеж с yookassa_id={yookassa_id} уже существует, обновляем...")
+            cursor.execute('''
+                UPDATE payments 
+                SET user_id = ?, company_arc_id = ?, amount = ?, status = ?
+                WHERE yookassa_payment_id = ?
+            ''', (user_id, company_arc_id, amount, status, yookassa_id))
+            payment_id = existing[0]
+        else:
+            print(f"🔍 DEBUG: Вставляем новый платеж...")
+            # Сохраняем платеж
+            cursor.execute('''
+                INSERT INTO payments (user_id, company_arc_id, amount, status, yookassa_payment_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, company_arc_id, amount, status, yookassa_id))
+            
+            payment_id = cursor.lastrowid
         
         conn.commit()
-        payment_id = cursor.lastrowid
+        
+        print(f"✅ DEBUG: Платеж сохранен: ID {payment_id}")
+        
+        # Проверяем что действительно сохранилось
+        cursor.execute('SELECT * FROM payments WHERE id = ?', (payment_id,))
+        saved = cursor.fetchone()
+        
+        if saved:
+            print(f"✅ DEBUG: Подтверждение сохранения:")
+            print(f"  DB ID: {saved[0]}")
+            print(f"  User ID: {saved[1]}")
+            print(f"  Company Arc ID: {saved[2]}")
+            print(f"  Amount: {saved[3]}")
+            print(f"  Status: {saved[4]}")
+            print(f"  Yookassa ID: {saved[5]}")
+        else:
+            print(f"❌ DEBUG: КРИТИЧЕСКАЯ ОШИБКА: платеж не найден после сохранения!")
         
         logger.info(f"✅ Платеж сохранен: ID {payment_id}, user={user_id}, company_arc={company_arc_id}, amount={amount}₽, yookassa={yookassa_id}")
         return payment_id
         
+    except sqlite3.IntegrityError as e:
+        print(f"❌ DEBUG: Ошибка целостности данных: {e}")
+        # Пробуем обновить существующую запись
+        try:
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE payments 
+                    SET user_id = ?, company_arc_id = ?, amount = ?, status = ?
+                    WHERE yookassa_payment_id = ?
+                ''', (user_id, company_arc_id, amount, status, yookassa_id))
+                conn.commit()
+                
+                cursor.execute("SELECT id FROM payments WHERE yookassa_payment_id = ?", (yookassa_id,))
+                existing = cursor.fetchone()
+                if existing:
+                    print(f"✅ DEBUG: Существующий платеж обновлен: ID {existing[0]}")
+                    return existing[0]
+        except Exception as e2:
+            print(f"❌ DEBUG: Ошибка при обновлении: {e2}")
+        return None
+        
     except Exception as e:
+        print(f"🚨 DEBUG: КРИТИЧЕСКАЯ ОШИБКА сохранения платежа: {e}")
+        import traceback
+        traceback.print_exc()
         logger.error(f"🚨 Ошибка сохранения платежа: {e}", exc_info=True)
         return None
+        
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def update_payment_status(yookassa_id, status):
     """Обновляет статус платежа для компании"""
@@ -4684,6 +4753,441 @@ def check_user_company_access(user_id):
         return False, f"Ошибка: {e}"
     finally:
         conn.close()
+
+def create_yookassa_payment_simple(user_id, company_arc_id, amount, trial=False, description=""):
+    """Упрощенная версия создания платежа БЕЗ чека (для тестирования)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Создание УПРОЩЕННОГО платежа: user={user_id}, company_arc={company_arc_id}, amount={amount}")
+    
+    import requests
+    import base64
+    import uuid
+    
+    auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    
+    idempotence_key = str(uuid.uuid4())
+    
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/json",
+        "Idempotence-Key": idempotence_key
+    }
+    
+    # Получаем данные компании
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT c.name as company_name
+        FROM company_arcs ca
+        JOIN companies c ON ca.company_id = c.company_id
+        WHERE ca.company_arc_id = ?
+    ''', (company_arc_id,))
+    
+    result = cursor.fetchone()
+    company_name = result[0] if result else f"Компания {company_arc_id}"
+    
+    conn.close()
+    
+    if not description:
+        description = f"Доступ к тренингу компании '{company_name}'"
+    
+    # ★★★ УПРОЩЕННЫЙ платеж БЕЗ чека ★★★
+    payment_data = {
+        "amount": {
+            "value": f"{amount:.2f}",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": YOOKASSA_RETURN_URL
+        },
+        "description": description,
+        "capture": True,
+        "metadata": {
+            "user_id": user_id,
+            "company_arc_id": company_arc_id,
+            "trial": trial,
+            "company_name": company_name
+        }
+    }
+    
+    # ★★★ НЕ добавляем receipt вообще ★★★
+    
+    logger.info(f"Создание упрощенного платежа для '{company_name}'")
+    
+    try:
+        response = requests.post(
+            YOOKASSA_API_URL, 
+            json=payment_data, 
+            headers=headers, 
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            payment_info = response.json()
+            payment_id = payment_info["id"]
+            confirmation_url = payment_info["confirmation"]["confirmation_url"]
+            
+            logger.info(f"✅ Упрощенный платеж создан: {payment_id}")
+            
+            # Сохраняем в БД
+            save_payment(user_id, company_arc_id, amount, payment_id, 'pending')
+            
+            return confirmation_url, payment_id
+        else:
+            error_msg = f"Ошибка {response.status_code}: {response.text}"
+            logger.error(error_msg)
+            return None, error_msg
+            
+    except Exception as e:
+        error_msg = f"Исключение: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return None, error_msg
+
+def create_yookassa_payment_with_receipt(user_id, company_arc_id, amount, trial=False, description=""):
+    """Создает платеж в Юкассе с корректным чеком (обязательно нужен email или телефон)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    print(f"🔍 Создание платежа С чеком: user={user_id}, amount={amount}")
+    
+    import requests
+    import base64
+    import uuid
+    
+    auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    
+    idempotence_key = str(uuid.uuid4())
+    
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/json",
+        "Idempotence-Key": idempotence_key
+    }
+    
+    # Получаем данные компании
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT c.name as company_name, c.price
+        FROM company_arcs ca
+        JOIN companies c ON ca.company_id = c.company_id
+        WHERE ca.company_arc_id = ?
+    ''', (company_arc_id,))
+    
+    result = cursor.fetchone()
+    company_name = result[0] if result else f"Компания {company_arc_id}"
+    company_price = result[1] if result else amount
+    
+    # Получаем данные пользователя
+    cursor.execute('''
+        SELECT phone, fio, username, user_id 
+        FROM users WHERE user_id = ?
+    ''', (user_id,))
+    
+    user_data = cursor.fetchone()
+    
+    if user_data:
+        user_phone, user_fio, username, user_id_db = user_data
+        
+        # Если нет ФИО, используем user_id
+        if not user_fio or user_fio.strip() == "":
+            user_fio = f"Пользователь {user_id}"
+        
+        # Если нет телефона, создаем email на основе user_id
+        customer_info = {"full_name": user_fio[:128]}
+        
+        if user_phone and user_phone.strip() != "":
+            # Очищаем телефон от лишних символов
+            import re
+            clean_phone = re.sub(r'[^\d+]', '', user_phone)
+            if clean_phone.startswith('+'):
+                customer_info["phone"] = clean_phone
+            elif len(clean_phone) == 11 and clean_phone.startswith(('7', '8')):
+                customer_info["phone"] = f"+7{clean_phone[1:]}"
+            else:
+                # Если телефон некорректный, используем email
+                customer_info["email"] = f"user{user_id}@telegram.bot"
+        else:
+            # Если нет телефона, используем email
+            if username and username.strip() != "":
+                customer_info["email"] = f"{username}@telegram.bot"
+            else:
+                customer_info["email"] = f"user{user_id}@telegram.bot"
+    else:
+        # Если пользователь не найден, создаем минимальные данные
+        customer_info = {
+            "full_name": f"Пользователь {user_id}",
+            "email": f"user{user_id}@telegram.bot"
+        }
+    
+    conn.close()
+    
+    if not description:
+        description = f"Доступ к тренингу компании '{company_name}'"
+    
+    # ★★★ КОРРЕКТНЫЙ платеж С чеком ★★★
+    payment_data = {
+        "amount": {
+            "value": f"{amount:.2f}",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": YOOKASSA_RETURN_URL
+        },
+        "description": description[:128],
+        "capture": True,
+        "metadata": {
+            "user_id": str(user_id),
+            "company_arc_id": str(company_arc_id),
+            "trial": str(trial)
+        },
+        "receipt": {
+            "customer": customer_info,
+            "items": [
+                {
+                    "description": f"Доступ к тренингу компании '{company_name}'"[:128],
+                    "quantity": "1.00",
+                    "amount": {
+                        "value": f"{amount:.2f}",
+                        "currency": "RUB"
+                    },
+                    "vat_code": "1",  # НДС 20%
+                    "payment_mode": "full_payment",
+                    "payment_subject": "service",
+                    "country_of_origin_code": "643"  # Россия
+                }
+            ]
+        }
+    }
+    
+    print(f"🔍 Данные для платежа:")
+    print(f"  Customer: {customer_info}")
+    print(f"  Amount: {amount}₽")
+    print(f"  Description: {description[:50]}...")
+    
+    try:
+        response = requests.post(
+            YOOKASSA_API_URL, 
+            json=payment_data, 
+            headers=headers, 
+            timeout=30
+        )
+        
+        print(f"🔍 Ответ Юкассы: {response.status_code}")
+        
+        if response.status_code == 200:
+            payment_info = response.json()
+            payment_id = payment_info["id"]
+            confirmation_url = payment_info["confirmation"]["confirmation_url"]
+            
+            print(f"✅ Платеж создан успешно!")
+            print(f"  Payment ID: {payment_id}")
+            print(f"  URL: {confirmation_url}")
+            
+            # ★★★ ВАЖНО: Сохраняем в БД с дополнительной отладкой ★★★
+            print(f"🔍 Сохраняем платеж в БД...")
+            saved_id = save_payment(user_id, company_arc_id, amount, payment_id, 'pending')
+            
+            if saved_id:
+                print(f"✅ Платеж сохранен в БД с ID: {saved_id}")
+                
+                # Проверяем что действительно сохранилось
+                conn = sqlite3.connect('mentor_bot.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM payments WHERE id = ?", (saved_id,))
+                saved = cursor.fetchone()
+                conn.close()
+                
+                if saved:
+                    print(f"✅ Подтверждение: платеж в БД: ID={saved[0]}, Yookassa={saved[5]}")
+                else:
+                    print(f"❌ ОШИБКА: платеж не найден в БД после сохранения!")
+                
+            else:
+                print(f"❌ ОШИБКА: save_payment вернула None!")
+            
+            return confirmation_url, payment_id
+        else:
+            error_msg = f"Ошибка {response.status_code}: {response.text}"
+            print(f"❌ Ошибка создания платежа: {error_msg}")
+            return None, error_msg
+            
+    except Exception as e:
+        error_msg = f"Исключение: {str(e)}"
+        print(f"❌ Ошибка: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return None, error_msg
+
+def create_test_user_with_complete_data():
+    """Создает тестового пользователя с полными данными для чека"""
+    print("🔍 Создание тестового пользователя с полными данными...")
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Удаляем старые тестовые данные если есть
+    cursor.execute("DELETE FROM users WHERE user_id = 999999999")
+    
+    # Создаем пользователя с ВСЕМИ необходимыми данными
+    test_user_id = 999999999
+    test_phone = "+79998887766"  # Корректный российский номер
+    test_fio = "Иванов Иван Иванович"
+    test_username = "testuser_complete"
+    
+    cursor.execute('''
+        INSERT INTO users (user_id, username, first_name, fio, phone, accepted_offer, city)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (test_user_id, test_username, "Иван", test_fio, test_phone, 1, "Москва (+0)"))
+    
+    # Находим или создаем компанию
+    cursor.execute("SELECT company_id FROM companies LIMIT 1")
+    company = cursor.fetchone()
+    
+    if company:
+        company_id = company[0]
+    else:
+        # Создаем тестовую компанию
+        cursor.execute('''
+            INSERT INTO companies (name, join_key, start_date, price, created_by)
+            VALUES (?, ?, ?, ?, ?)
+        ''', ("Тестовая Компания ООО", "TESTCOMP", "2024-01-01", 1000, test_user_id))
+        company_id = cursor.lastrowid
+        
+        # Создаем арку компании
+        cursor.execute('''
+            INSERT INTO company_arcs (company_id, arc_id, actual_start_date, actual_end_date)
+            VALUES (?, 1, ?, DATE(?, '+56 days'))
+        ''', (company_id, "2024-01-01", "2024-01-01"))
+    
+    # Привязываем пользователя к компании
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_companies (user_id, company_id, is_active)
+        VALUES (?, ?, 1)
+    ''', (test_user_id, company_id))
+    
+    cursor.execute('UPDATE users SET current_company_id = ? WHERE user_id = ?', (company_id, test_user_id))
+    
+    # Получаем company_arc_id
+    cursor.execute("SELECT company_arc_id FROM company_arcs WHERE company_id = ?", (company_id,))
+    company_arc = cursor.fetchone()
+    company_arc_id = company_arc[0] if company_arc else 1
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"✅ Тестовый пользователь создан:")
+    print(f"   User ID: {test_user_id}")
+    print(f"   Phone: {test_phone} (корректный для чека)")
+    print(f"   FIO: {test_fio} (полное)")
+    print(f"   Username: {test_username}")
+    print(f"   Company ID: {company_id}")
+    print(f"   Company Arc ID: {company_arc_id}")
+    
+    return test_user_id, company_arc_id
+
+def test_real_payment_1_ruble():
+    """Тестируем создание реального платежа на 1 рубль"""
+    print("\n🔍 Тестирование реального платежа 1₽...")
+    
+    user_id, company_arc_id = create_test_user_with_complete_data()
+    
+    test_amount = 1.00  # 1 рубль для теста
+    
+    print(f"\nСоздаем платеж 1₽ через create_yookassa_payment_with_receipt...")
+    print(f"  User ID: {user_id}")
+    print(f"  Company Arc ID: {company_arc_id}")
+    print(f"  Amount: {test_amount}₽")
+    
+    try:
+        url, payment_id = create_yookassa_payment_with_receipt(
+            user_id, company_arc_id, test_amount, False, "Тестовый платеж 1₽"
+        )
+        
+        if url and payment_id:
+            print(f"\n✅ РЕАЛЬНЫЙ ПЛАТЕЖ СОЗДАН!")
+            print(f"  Payment URL: {url}")
+            print(f"  Payment ID: {payment_id}")
+            print(f"\n📋 Инструкция:")
+            print(f"  1. Перейдите по ссылке: {url}")
+            print(f"  2. Оплатите 1 рубль")
+            print(f"  3. Вернитесь в бот и нажмите '✅ Я оплатил'")
+            print(f"  4. ID для проверки: {payment_id}")
+            
+            # Сохраняем ID платежа в файл для удобства
+            with open('test_payment_id.txt', 'w') as f:
+                f.write(payment_id)
+            
+            return payment_id
+        else:
+            print(f"❌ Ошибка создания платежа: {payment_id}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Исключение: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def test_callback_with_real_payment(payment_id):
+    """Тестируем callback с реальным платежом"""
+    print(f"\n🔍 Тестирование callback с реальным платежом {payment_id}...")
+    
+    if not payment_id:
+        print("❌ Нет ID платежа для теста")
+        return
+    
+    # Импортируем функцию
+    try:
+        from bot import check_payment_callback
+        import asyncio
+        
+        # Мокаем объекты
+        class MockQuery:
+            def __init__(self, data, user_id):
+                self.data = data
+                self.from_user = type('obj', (object,), {'id': user_id})()
+            
+            async def answer(self, text=None, show_alert=False):
+                if text:
+                    print(f"  💬 Callback answer: {text}")
+                return None
+            
+            async def edit_message_text(self, text, parse_mode=None):
+                print(f"  📝 Edit message: {text[:150]}...")
+                return None
+        
+        class MockUpdate:
+            def __init__(self, callback_data, user_id):
+                self.callback_query = MockQuery(callback_data, user_id)
+            
+            async def answer(self):
+                return None
+        
+        # Тестовый user_id (должен совпадать с user_id из платежа)
+        test_user_id = 999999999
+        
+        print(f"Запускаем check_payment_callback для реального платежа {payment_id}...")
+        
+        # Создаем mock объекты
+        update = MockUpdate(f"check_payment_{payment_id}", test_user_id)
+        context = type('obj', (object,), {})()
+        
+        # Запускаем
+        asyncio.run(check_payment_callback(update, context))
+        
+    except Exception as e:
+        print(f"❌ Ошибка при тесте callback: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 

@@ -784,3 +784,142 @@ sqlite3.OperationalError: no such table: user_company_access
 2026-02-08 20:05:34,693 - bot - INFO - === Бот запущен с логированием платежей ===
 2026-02-08 20:07:31,192 - __main__ - INFO - === Бот запущен с логированием платежей ===
 2026-02-08 20:07:42,002 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 21:36:13,276 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 21:36:14,564 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-08 21:36:26,345 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 21:37:37,253 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 21:44:39,524 - apscheduler.executors.default - WARNING - Run time of job "send_scheduled_notifications (trigger: interval[0:01:00], next run at: 2026-02-08 16:45:36 UTC)" was missed by 0:00:02.563701
+2026-02-08 21:49:24,477 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-08 21:49:24,478 - database - INFO - Создание платежа для компании: user=918928334, company_arc=1, amount=25
+2026-02-08 21:49:24,479 - database - INFO - Создание платежа для компании 'ТестоваяКомпания'
+2026-02-08 21:49:25,118 - database - INFO - ✅ Платеж для компании создан: 311ad255-000f-5000-8000-18ebf30d504e
+2026-02-08 21:49:25,119 - database - WARNING - Таблица payments имеет старую структуру, пересоздаем...
+2026-02-08 21:49:25,143 - database - ERROR - 🚨 Ошибка сохранения платежа: unrecognized token: "#"
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 2805, in save_payment
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        CREATE TABLE payments (
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+        )
+        ^
+    ''')
+    ^^^^
+sqlite3.OperationalError: unrecognized token: "#"
+2026-02-08 21:49:25,476 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=25
+2026-02-08 21:50:39,267 - __main__ - INFO - Проверка платежа компании: 311ad255-000f-5000-8000-18ebf30d504e пользователем 918928334
+2026-02-08 21:50:39,731 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 21:50:39,731 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 21:51:09,476 - __main__ - INFO - Проверка платежа компании: 311ad255-000f-5000-8000-18ebf30d504e пользователем 918928334
+2026-02-08 21:51:09,930 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 21:51:09,931 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 21:52:11,261 - __main__ - INFO - Проверка платежа компании: 311ad255-000f-5000-8000-18ebf30d504e пользователем 918928334
+2026-02-08 21:52:11,703 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 21:52:11,704 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 21:52:49,912 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-08 21:52:49,913 - database - INFO - Создание платежа для компании: user=918928334, company_arc=1, amount=25
+2026-02-08 21:52:49,914 - database - INFO - Создание платежа для компании 'ТестоваяКомпания'
+2026-02-08 21:52:50,435 - database - INFO - ✅ Платеж для компании создан: 311ad322-000f-5001-8000-1ce97f02ca85
+2026-02-08 21:52:50,436 - database - WARNING - Таблица payments имеет старую структуру, пересоздаем...
+2026-02-08 21:52:50,436 - database - ERROR - 🚨 Ошибка сохранения платежа: unrecognized token: "#"
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 2805, in save_payment
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        CREATE TABLE payments (
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+        )
+        ^
+    ''')
+    ^^^^
+sqlite3.OperationalError: unrecognized token: "#"
+2026-02-08 21:52:50,729 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=25
+2026-02-08 21:52:57,771 - __main__ - INFO - Проверка платежа компании: 311ad322-000f-5001-8000-1ce97f02ca85 пользователем 918928334
+2026-02-08 21:52:58,201 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 22:10:07,567 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 22:10:07,579 - bot - INFO - Проверка платежа компании: 2e9a7c12-0508-4702-85eb-7fa5b9a7d8b0 пользователем 123456789
+2026-02-08 22:31:30,699 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 22:31:30,720 - bot - INFO - Проверка платежа компании: test_payment_123 пользователем 123456789
+2026-02-08 22:40:31,195 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 22:40:31,217 - bot - INFO - Начало покупки: user=123456789, trial=False
+2026-02-08 22:50:02,847 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 22:50:02,859 - bot - INFO - Проверка платежа компании: test_yookassa_123 пользователем 555555555
+2026-02-08 23:02:22,822 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 23:02:33,640 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 23:02:40,792 - database - WARNING - Таблица payments имеет старую структуру, пересоздаем...
+2026-02-08 23:02:40,798 - database - ERROR - 🚨 Ошибка сохранения платежа: unrecognized token: "#"
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 2805, in save_payment
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        CREATE TABLE payments (
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+        )
+        ^
+    ''')
+    ^^^^
+sqlite3.OperationalError: unrecognized token: "#"
+2026-02-08 23:03:41,362 - __main__ - INFO - Проверка платежа компании: 311ae380-000f-5000-b000-1223c4f0a52d пользователем 918928334
+2026-02-08 23:03:41,802 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 23:03:41,803 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 23:04:01,919 - __main__ - INFO - Проверка платежа компании: 311ae380-000f-5000-b000-1223c4f0a52d пользователем 918928334
+2026-02-08 23:04:02,352 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 23:04:02,353 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 23:05:45,127 - __main__ - INFO - Проверка платежа компании: 311ae380-000f-5000-b000-1223c4f0a52d пользователем 918928334
+2026-02-08 23:05:45,547 - database - ERROR - Ошибка обновления статуса: no such table: payments
+2026-02-08 23:05:45,548 - __main__ - ERROR - Ошибка проверки платежа: no such table: payments
+2026-02-08 23:10:03,141 - bot - INFO - === Бот запущен с логированием платежей ===

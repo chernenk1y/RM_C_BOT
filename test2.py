@@ -1,55 +1,70 @@
-"""
-Поиск всех упоминаний user_company_access
-"""
-import re
+# check_payment_status.py
+import requests
+import base64
+import sys
+import os
 
-def find_user_company_access_references():
-    print("🔍 ПОИСК user_company_access В КОДЕ")
-    print("=" * 60)
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from database import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_API_URL
+
+def check_payment_status(payment_id):
+    """Проверяет статус платежа напрямую через API"""
+    print(f"🔍 Проверка статуса платежа: {payment_id}")
     
-    files = ['bot.py', 'database.py']
+    auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
     
-    for file_name in files:
-        try:
-            with open(file_name, 'r', encoding='utf-8') as f:
-                content = f.read()
-                
-            # Ищем все упоминания
-            lines = content.split('\n')
-            found = False
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(f"{YOOKASSA_API_URL}/{payment_id}", headers=headers, timeout=10)
+        
+        print(f"Статус ответа: {response.status_code}")
+        
+        if response.status_code == 200:
+            payment_info = response.json()
+            print(f"✅ Платеж найден:")
+            print(f"  ID: {payment_info.get('id')}")
+            print(f"  Статус: {payment_info.get('status')}")
+            print(f"  Сумма: {payment_info.get('amount', {}).get('value')} {payment_info.get('amount', {}).get('currency')}")
+            print(f"  Описание: {payment_info.get('description')}")
+            print(f"  Создан: {payment_info.get('created_at')}")
             
-            for i, line in enumerate(lines, 1):
-                if 'user_company_access' in line:
-                    if not found:
-                        print(f"\n📄 Файл: {file_name}")
-                        found = True
-                    
-                    # Обрезаем длинные строки
-                    line_display = line.strip()
-                    if len(line_display) > 100:
-                        line_display = line_display[:97] + "..."
-                    
-                    print(f"   Строка {i}: {line_display}")
-                    
-                    # Предлагаем замену
-                    if 'FROM user_company_access' in line.upper():
-                        new_line = line.replace('user_company_access', 'user_arc_access')
-                        print(f"   💡 Заменить на: {new_line.strip()}")
-                    elif 'JOIN user_company_access' in line.upper():
-                        new_line = line.replace('user_company_access', 'user_arc_access')
-                        print(f"   💡 Заменить на: {new_line.strip()}")
+            # Проверяем в нашей базе
+            import sqlite3
+            conn = sqlite3.connect('mentor_bot.db')
+            cursor = conn.cursor()
             
-            if not found:
-                print(f"\n📄 Файл: {file_name} - упоминаний не найдено")
-                
-        except Exception as e:
-            print(f"\n❌ Ошибка чтения {file_name}: {e}")
-    
-    print("\n" + "=" * 60)
-    print("🎯 РЕКОМЕНДАЦИИ:")
-    print("1. Замени все 'user_company_access' на 'user_arc_access'")
-    print("2. В запросах используй 'company_arc_id IS NOT NULL' вместо 'access_type'")
-    print("=" * 60)
+            cursor.execute("SELECT * FROM payments WHERE yookassa_payment_id = ?", (payment_id,))
+            payment_db = cursor.fetchone()
+            
+            if payment_db:
+                print(f"\n✅ Платеж в нашей БД:")
+                print(f"  ID: {payment_db[0]}")
+                print(f"  User ID: {payment_db[1]}")
+                print(f"  Company Arc ID: {payment_db[2]}")
+                print(f"  Amount: {payment_db[3]}")
+                print(f"  Status: {payment_db[4]}")
+            else:
+                print(f"\n❌ Платеж не найден в нашей БД!")
+            
+            conn.close()
+        else:
+            print(f"❌ Ошибка: {response.status_code}")
+            print(f"Ответ: {response.text}")
+            
+    except Exception as e:
+        print(f"❌ Исключение: {e}")
 
 if __name__ == "__main__":
-    find_user_company_access_references()
+    if len(sys.argv) > 1:
+        payment_id = sys.argv[1]
+    else:
+        # Используем последний платеж из консоли
+        payment_id = "311ae380-000f-5000-b000-1223c4f0a52d"
+    
+    check_payment_status(payment_id)

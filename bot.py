@@ -321,40 +321,60 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 5. Обработка кнопок покупки (используем существующие функции)
     if text == "🎁 Пробный доступ(3 дня)":
-        # Проверяем выбрана ли часть
-        if 'current_arc_catalog' not in context.user_data:
-            await update.message.reply_text("❌ Сначала выберите часть")
-            return
+        # Для пробного доступа к компании
+        user_id = update.message.from_user.id
+        from database import get_user_company, get_company_arc
         
-        # Проверяем что это ТЕКУЩАЯ часть (активная)
-        part_status = context.user_data.get('part_status', '')
-        if part_status != 'активный':
+        # Проверяем компанию пользователя
+        user_company = get_user_company(user_id)
+        if not user_company:
             await update.message.reply_text(
-                "❌ **Пробный доступ доступен только для активных марафонов!**\n\n"
-                "Для будущих марафонов доступен только полный доступ.",
+                "❌ **Вы не состоите в компании!**\n\n"
+                "Для покупки доступа сначала присоединитесь к компании через профиль.",
                 parse_mode='Markdown'
             )
             return
         
-        await grant_free_trial_access(update, context)
-        return
-    
-    if text == "💰 Купить полный доступ":
-        # Проверяем выбрана ли часть
-        if 'current_arc_catalog' not in context.user_data:
-            await update.message.reply_text("❌ Сначала выберите часть")
+        # Получаем арку компании
+        company_arc = get_company_arc(user_company['company_id'])
+        if not company_arc:
+            await update.message.reply_text("❌ У компании нет активного тренинга")
             return
         
-        # Вызываем функцию покупки через Юкассу
-        await buy_arc_with_yookassa(update, context, trial=False)
+        # Сохраняем данные о покупке
+        context.user_data['current_company_arc_id'] = company_arc['company_arc_id']
+        context.user_data['current_company_name'] = user_company['name']
+        
+        # Вызываем функцию покупки с trial=True
+        await buy_arc_with_yookassa(update, context, trial=True)
         return
-    
-    if text == "💰 Купить доступ заранее":
-        # Проверяем выбрана ли часть
-        if 'current_arc_catalog' not in context.user_data:
-            await update.message.reply_text("❌ Сначала выберите часть")
+
+    if text == "💰 Купить полный доступ" or text == "💰 Купить доступ заранее":
+        # Для полного доступа к компании
+        user_id = update.message.from_user.id
+        from database import get_user_company, get_company_arc
+        
+        # Проверяем компанию пользователя
+        user_company = get_user_company(user_id)
+        if not user_company:
+            await update.message.reply_text(
+                "❌ **Вы не состоите в компании!**\n\n"
+                "Для покупки доступа сначала присоединитесь к компании через профиль.",
+                parse_mode='Markdown'
+            )
             return
         
+        # Получаем арку компании
+        company_arc = get_company_arc(user_company['company_id'])
+        if not company_arc:
+            await update.message.reply_text("❌ У компании нет активного тренинга")
+            return
+        
+        # Сохраняем данные о покупке
+        context.user_data['current_company_arc_id'] = company_arc['company_arc_id']
+        context.user_data['current_company_name'] = user_company['name']
+        
+        # Вызываем функцию покупки с trial=False
         await buy_arc_with_yookassa(update, context, trial=False)
         return
 
@@ -416,13 +436,40 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await show_users_stats(update, context)
             return
 
+    elif text == "🎯 Купить тренинг":
+        user_id = update.message.from_user.id
+        
+        # ★★★ ПРОВЕРКА КОМПАНИИ ★★★
+        from database import get_user_company
+        
+        user_company = get_user_company(user_id)
+        if not user_company:
+            keyboard = [["🔑 Ввести ключ компании"], ["🔙 В главное меню"]]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            
+            await update.message.reply_text(
+                "⚠️ **Доступ заблокирован!**\n\n"
+                "Для доступа к тренингу необходимо присоединиться к компании.\n\n"
+                "1. Получите ключ компании у администратора\n"
+                "2. Перейдите в 👤 Профиль → 🔑 Ввести ключ компании\n"
+                "3. Введите полученный ключ\n\n"
+                "После этого вы получите доступ ко всем функциям.",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Если компания есть, показываем каталог
+        await show_training_catalog(update, context)
+        return
+
     # 1. Сначала ВСЕ уникальные кнопки которые точно определены
     unique_buttons = {
         "✅ Отправить задание": submit_assignment,
         "📝 Доступные задания": show_available_assignments,
         "👨‍🏫 Проверка заданий": admin_panel,
         "📚 Мои задания": my_assignments_menu,
-        "🎯 Купить тренинг": show_training_catalog,
+        "🎯 Купить тренинг": lambda u, c: show_training_catalog_with_company_check(u, c),
         "👤 Профиль": profile_menu,
         "🛠 Тех.поддержка": tech_support_menu,
         "🔙 В главное меню": start,
@@ -6691,6 +6738,8 @@ async def buy_arc_with_yookassa(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.message.from_user.id
     logger.info(f"Начало покупки: user={user_id}, trial={trial}")
     
+    print(f"🔍 DEBUG buy_arc_with_yookassa: user_id={user_id}, trial={trial}")
+    
     # ★★★ ДЛЯ ТРИАЛЬНОГО ДОСТУПА (БЕСПЛАТНО) ★★★
     if trial:
         # БЕСПЛАТНЫЙ пробный доступ - сразу выдаем
@@ -6733,10 +6782,21 @@ async def buy_arc_with_yookassa(update: Update, context: ContextTypes.DEFAULT_TY
     # ★★★ СОЗДАЕМ ПЛАТЕЖ ЧЕРЕЗ ЮКАССУ ★★★
     description = f"Полный доступ к тренингу компании '{company_name}'"
     
-    from database import create_yookassa_payment
-    payment_url, payment_id = create_yookassa_payment(
+    print(f"🔍 DEBUG: Создаем платеж для компании: {company_name}, цена: {price}")
+    
+    from database import create_yookassa_payment_with_receipt
+    payment_url, payment_id = create_yookassa_payment_with_receipt(
         user_id, company_arc_id, price, False, description
     )
+    
+    print(f"🔍 DEBUG: Результат create_yookassa_payment: url={payment_url}, payment_id={payment_id}")
+    
+    if not payment_url:
+        # Если упрощенная версия не сработала, пробуем обычную
+        from database import create_yookassa_payment
+        payment_url, payment_id = create_yookassa_payment(
+            user_id, company_arc_id, price, False, description
+        )
     
     if not payment_url:
         await update.message.reply_text(f"❌ Ошибка создания платежа: {payment_id}")
@@ -6780,31 +6840,50 @@ async def buy_arc_with_yookassa(update: Update, context: ContextTypes.DEFAULT_TY
     logger.info(f"Создан платеж: user={user_id}, company_arc={company_arc_id}, amount={price}")        
 
 async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет статус платежа и выдает доступ к тренингу компании"""
+    """Проверяет статус платежа - ОБНОВЛЕННАЯ С ОТЛАДКОЙ"""
     query = update.callback_query
+    
+    print(f"🔍 DEBUG: check_payment_callback ВЫЗВАН!")
+    print(f"  Data: {query.data}")
+    print(f"  User ID: {query.from_user.id}")
+    
+    # ★★★ ВАЖНО: Сначала отвечаем на callback ★★★
     await query.answer()
+    print(f"  Callback answered")
     
     if query.data.startswith('check_payment_'):
         payment_id = query.data.replace('check_payment_', '')
         user_id = query.from_user.id
         
-        logger.info(f"Проверка платежа компании: {payment_id} пользователем {user_id}")
+        print(f"🔍 DEBUG: Проверка платежа {payment_id} для пользователя {user_id}")
         
         try:
             # 1. Проверяем статус через API Юкассы
             import base64
+            import requests
             from database import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_API_URL
             
+            print(f"🔍 DEBUG: Проверяем платеж через API Юкассы: {payment_id}")
+            
+            auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+            encoded_auth = base64.b64encode(auth_string.encode()).decode()
+            
             headers = {
-                "Authorization": f"Basic {base64.b64encode(f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'.encode()).decode()}",
+                "Authorization": f"Basic {encoded_auth}",
                 "Content-Type": "application/json"
             }
             
-            response = requests.get(f"{YOOKASSA_API_URL}/{payment_id}", headers=headers)
+            print(f"🔍 DEBUG: Отправляем запрос к {YOOKASSA_API_URL}/{payment_id}")
+            
+            response = requests.get(f"{YOOKASSA_API_URL}/{payment_id}", headers=headers, timeout=10)
+            
+            print(f"🔍 DEBUG: Ответ от Юкассы: статус {response.status_code}")
             
             if response.status_code == 200:
                 payment_info = response.json()
                 status = payment_info.get("status")
+                
+                print(f"🔍 DEBUG: Статус платежа в Юкассе: {status}")
                 
                 # 2. Обновляем статус в нашей БД
                 from database import update_payment_status
@@ -6836,27 +6915,34 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
                         # 4. ВЫДАЕМ ДОСТУП К КОМПАНИИ
                         from database import grant_arc_access
                         
-                        if amount == 100:  # Пробный доступ
-                            access_type = 'trial'
-                            access_text = "пробный (3 дня)"
-                        else:  # Полный доступ
-                            access_type = 'paid'
-                            access_text = "полный (56 дней)"
+                        access_type = 'paid'
+                        access_text = f"полный ({amount}₽)"
+                        
+                        print(f"🔍 DEBUG: Выдаем доступ user={user_id}, company_arc={company_arc_id}")
                         
                         # Выдаем доступ к компании
                         access_granted = grant_arc_access(user_id, company_arc_id, access_type)
                         
                         if access_granted:
-                            await query.edit_message_text(
+                            print(f"✅ DEBUG: Доступ выдан успешно")
+                            
+                            message = (
                                 f"✅ **Оплата подтверждена!**\n\n"
                                 f"🏢 **Компания:** {company_name}\n"
                                 f"💰 **Сумма:** {amount}₽\n"
                                 f"🎯 **Доступ:** {access_text}\n\n"
-                                f"Теперь вы можете начать обучение в разделе '📚 Мои задания'.",
+                                f"Теперь вы можете начать обучение в разделе '📚 Мои задания'."
+                            )
+                            
+                            await query.edit_message_text(
+                                message,
                                 parse_mode='Markdown'
                             )
-                            logger.info(f"✅ Доступ к компании '{company_name}' выдан пользователю {user_id}")
+                            
+                            print(f"✅ Сообщение обновлено")
                         else:
+                            error_msg = "❌ Ошибка выдачи доступа"
+                            print(f"❌ DEBUG: {error_msg}")
                             await query.edit_message_text(
                                 f"✅ **Оплата подтверждена, но возникла проблема с доступом.**\n\n"
                                 f"🏢 Компания: {company_name}\n"
@@ -6865,6 +6951,8 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
                                 parse_mode='Markdown'
                             )
                     else:
+                        error_msg = "Платеж найден в Юкассе, но не в нашей базе"
+                        print(f"❌ DEBUG: {error_msg}")
                         await query.edit_message_text(
                             "❌ **Платеж найден в Юкассе, но не в нашей базе.**\n\n"
                             "Пожалуйста, обратитесь в поддержку.",
@@ -6872,6 +6960,7 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
                         )
                 
                 elif status == 'pending':
+                    print(f"⚠️ DEBUG: Платеж еще в обработке")
                     await query.answer(
                         "⏳ Платеж еще не подтвержден банком.\n"
                         "Обычно это занимает 1-2 минуты. Попробуйте через минуту.",
@@ -6879,6 +6968,7 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
                     )
                 
                 elif status == 'canceled':
+                    print(f"❌ DEBUG: Платеж отменен")
                     await query.edit_message_text(
                         "❌ **Платеж отменен.**\n\n"
                         "Попробуйте оплатить снова или обратитесь в поддержку.",
@@ -6886,19 +6976,23 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
                     )
                 
                 else:
+                    print(f"⚠️ DEBUG: Неизвестный статус: {status}")
                     await query.answer(f"Статус платежа: {status}", show_alert=True)
             
             elif response.status_code == 404:
+                print(f"❌ DEBUG: Платеж не найден в системе Юкассы")
                 await query.answer("Платеж не найден в системе Юкассы", show_alert=True)
             
             else:
                 error_msg = f"Ошибка API Юкассы: {response.status_code}"
-                logger.error(error_msg)
+                print(f"❌ DEBUG: {error_msg}")
                 await query.answer(error_msg, show_alert=True)
         
         except Exception as e:
             error_msg = f"Ошибка проверки платежа: {str(e)}"
-            logger.error(error_msg)
+            print(f"❌ DEBUG: {error_msg}")
+            import traceback
+            traceback.print_exc()
             await query.answer(error_msg, show_alert=True)
 
 async def send_long_message(update, text, prefix="", parse_mode='Markdown'):
@@ -7701,28 +7795,63 @@ async def show_training_catalog(update: Update, context: ContextTypes.DEFAULT_TY
     """Каталог тренинга - сразу выбор: Всё о курсе / Купить доступ"""
     context.user_data['current_section'] = 'training_catalog'
     
-    # ★★★ ПРОВЕРЯЕМ КОМПАНИЮ ПОЛЬЗОВАТЕЛЯ ★★★
-    from database import get_user_company
+    user_id = update.message.from_user.id
+    from database import get_user_company, get_company_arc
     
-    user_company = get_user_company(update.message.from_user.id)
-    
-    keyboard = [
-        ["📖 Всё о тренинге"],
-        ["💰 Купить доступ"],
-        ["🔙 В главное меню"]
-    ]
-    
-    # Если пользователь состоит в компании, добавляем информацию
-    message = "🎯 **Каталог тренинга 'Себя верни себе'**\n\n"
+    # Проверяем компанию пользователя
+    user_company = get_user_company(user_id)
     
     if user_company:
-        message += f"🏢 **Ваша компания:** {user_company['name']}\n"
-        message += f"📅 **Старт тренинга:** {user_company['start_date']}\n\n"
-        message += "Выберите раздел:"
+        # Пользователь состоит в компании
+        company_arc = get_company_arc(user_company['company_id'])
+        
+        if company_arc:
+            # У компании есть тренинг
+            message = f"🎯 **Каталог тренинга компании '{user_company['name']}'**\n\n"
+            message += f"🏢 **Компания:** {user_company['name']}\n"
+            message += f"📅 **Старт тренинга:** {company_arc['actual_start_date']}\n"
+            message += f"💰 **Цена доступа:** {user_company['price']}₽\n\n"
+            
+            # Проверяем доступ пользователя
+            from database import check_user_arc_access
+            has_access = check_user_arc_access(user_id, company_arc['company_arc_id'])
+            
+            if has_access:
+                message += "✅ **У вас уже есть доступ к тренингу!**\n\n"
+                message += "Перейдите в раздел '📚 Мои задания' для начала обучения."
+                keyboard = [
+                    ["📚 Мои задания"],
+                    ["🔙 В главное меню"]
+                ]
+            else:
+                message += "❌ **У вас нет доступа к тренингу компании**\n\n"
+                message += "Выберите тип доступа для покупки:"
+                keyboard = [
+                    ["🎁 Пробный доступ(3 дня)"],
+                    ["💰 Купить полный доступ"],
+                    ["📖 Всё о тренинге"],
+                    ["🔙 В главное меню"]
+                ]
+        else:
+            # У компании нет тренинга
+            message = f"⚠️ **У компании '{user_company['name']}' нет активного тренинга!**\n\n"
+            message += "Обратитесь к администратору компании для настройки тренинга."
+            keyboard = [
+                ["🔙 В главное меню"]
+            ]
     else:
+        # Пользователь не в компании
+        message = "🎯 **Каталог тренинга 'Себя верни себе'**\n\n"
         message += "⚠️ **Вы не состоите в компании!**\n\n"
         message += "Для покупки доступа сначала присоединитесь к компании через профиль.\n\n"
-        message += "Выберите раздел:"
+        message += "1. Получите ключ компании у администратора\n"
+        message += "2. Перейдите в 👤 Профиль → 🔑 Ввести ключ компании\n"
+        message += "3. Введите полученный ключ\n\n"
+        message += "После этого вы сможете купить доступ к тренингу компании."
+        
+        keyboard = [
+            ["🔙 В главное меню"]
+        ]
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
@@ -8491,31 +8620,76 @@ async def simple_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def fix_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Исправляет доступ для пользователя"""
+    """Исправляет доступ для пользователя - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
     user_id = update.message.from_user.id
+    from database import get_user_company, get_company_arc, grant_arc_access, check_user_arc_access
     
-    # Можно сделать для админа или для себя
-    target_user_id = user_id  # По умолчанию себе
-    
-    # Если админ, может указать другой ID
-    if is_admin(user_id) and context.args:
-        try:
-            target_user_id = int(context.args[0])
-        except:
-            target_user_id = user_id
-    
-    from database import grant_trial_access
-    success = grant_trial_access(target_user_id, 1)  # Часть 1
-    
-    if success:
+    # Проверяем компанию пользователя
+    user_company = get_user_company(user_id)
+    if not user_company:
         await update.message.reply_text(
-            f"✅ Доступ к Части 1 выдан пользователю {target_user_id}\n"
-            f"Проверь раздел 'Мои задания'"
+            "❌ **Вы не состоите в компании!**\n\n"
+            "Сначала присоединитесь к компании через профиль.",
+            parse_mode='Markdown'
         )
+        return
+    
+    # Получаем арку компании
+    company_arc = get_company_arc(user_company['company_id'])
+    if not company_arc:
+        await update.message.reply_text("❌ У компании нет активного тренинга")
+        return
+    
+    company_arc_id = company_arc['company_arc_id']
+    
+    # Проверяем статус платежа
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT status, amount FROM payments 
+        WHERE user_id = ? AND company_arc_id = ? 
+        ORDER BY created_at DESC LIMIT 1
+    ''', (user_id, company_arc_id))
+    
+    payment = cursor.fetchone()
+    
+    if payment:
+        status, amount = payment
+        
+        if status == 'succeeded':
+            # Платеж успешный - выдаем доступ
+            success = grant_arc_access(user_id, company_arc_id, 'paid')
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ **Доступ к компании '{user_company['name']}' восстановлен!**\n\n"
+                    f"💰 Оплачено: {amount}₽\n"
+                    f"📅 Старт: {company_arc['actual_start_date']}\n\n"
+                    f"Теперь вы можете использовать раздел '📚 Мои задания'.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ **Ошибка восстановления доступа.**\n\n"
+                    "Пожалуйста, обратитесь в поддержку.",
+                    parse_mode='Markdown'
+                )
+        else:
+            await update.message.reply_text(
+                f"❌ **Платеж не подтвержден.**\n\n"
+                f"Статус: {status}\n\n"
+                f"Если вы оплатили, подождите несколько минут и нажмите '✅ Я оплатил' в чате с платежом.",
+                parse_mode='Markdown'
+            )
     else:
         await update.message.reply_text(
-            f"❌ Не удалось выдать доступ. Проверь логи."
+            "❌ **Не найден платеж за эту компанию.**\n\n"
+            "Пожалуйста, сначала оплатите доступ через каталог тренинга.",
+            parse_mode='Markdown'
         )
+    
+    conn.close()
 
 async def check_tables(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет и создает таблицы если нужно"""
@@ -9823,18 +9997,17 @@ async def debug_current_arc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, parse_mode='Markdown')
 
 async def grant_free_trial_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выдает бесплатный пробный доступ на 3 дня"""
+    """Выдает бесплатный пробный доступ на 3 дня - ДЛЯ КОМПАНИЙ"""
     user_id = update.message.from_user.id
-    logger.info(f"Выдача бесплатного пробного доступа: user={user_id}")
     
-    # ★★★ ПРОВЕРЯЕМ КОМПАНИЮ ★★★
-    from database import get_user_company, get_company_arc, grant_arc_access
+    # Проверяем компанию пользователя
+    from database import get_user_company, get_company_arc, grant_trial_access
     
     user_company = get_user_company(user_id)
     if not user_company:
         await update.message.reply_text(
             "❌ **Вы не состоите в компании!**\n\n"
-            "Сначала присоединитесь к компании через профиль.",
+            "Для пробного доступа сначала присоединитесь к компании.",
             parse_mode='Markdown'
         )
         return
@@ -9859,37 +10032,25 @@ async def grant_free_trial_access(update: Update, context: ContextTypes.DEFAULT_
         )
         return
     
-    # ★★★ ПРОВЕРКА ДАТЫ СТАРТА ★★★
-    from datetime import datetime
-    today = datetime.now().date()
-    start_date = datetime.strptime(company_arc['actual_start_date'], '%Y-%m-%d').date()
-    
-    # Если тренинг уже идет более 10 дней - нельзя получить пробный доступ
-    if (today - start_date).days > 10:
-        await update.message.reply_text(
-            "❌ **Пробный доступ доступен только в первые 10 дней тренинга!**\n\n"
-            "Вы можете приобрести полный доступ.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # ★★★ ВЫДАЕМ ПРОБНЫЙ ДОСТУП ★★★
-    success = grant_arc_access(user_id, company_arc_id, 'trial')
+    # Выдаем пробный доступ
+    success = grant_trial_access(user_id, company_arc_id)
     
     if success:
         await update.message.reply_text(
-            f"🎁 **Пробный доступ выдан!**\n\n"
+            f"🎉 **Пробный доступ на 3 дня активирован!**\n\n"
             f"🏢 **Компания:** {user_company['name']}\n"
             f"📅 **Старт тренинга:** {company_arc['actual_start_date']}\n"
-            f"⏳ **Доступ:** первые 3 дня тренинга\n\n"
-            f"Теперь вы можете перейти в раздел '📚 Мои задания' и начать обучение!\n\n"
-            f"💡 **После пробного периода вы можете приобрести полный доступ.**",
+            f"⏱️ **Доступ до:** {datetime.now() + timedelta(days=3)}\n\n"
+            f"Теперь вы можете начать обучение в разделе '📚 Мои задания'.\n\n"
+            f"💡 **После окончания пробного периода:**\n"
+            f"• Доступ к заданиям закроется\n"
+            f"• Для продолжения нужно купить полный доступ\n"
+            f"• Прогресс сохранится после покупки",
             parse_mode='Markdown'
         )
-        logger.info(f"✅ Пробный доступ выдан: user={user_id}, company_arc={company_arc_id}")
     else:
         await update.message.reply_text(
-            "❌ **Ошибка выдачи пробного доступа!**\n\n"
+            "❌ **Ошибка активации пробного доступа!**\n\n"
             "Пожалуйста, попробуйте позже или обратитесь в поддержку.",
             parse_mode='Markdown'
         )
@@ -11172,6 +11333,254 @@ async def show_auto_approved_assignment(update: Update, context: ContextTypes.DE
     
     await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def show_training_catalog_with_company_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет компанию перед показом каталога"""
+    user_id = update.message.from_user.id
+    
+    from database import get_user_company
+    user_company = get_user_company(user_id)
+    
+    if not user_company:
+        keyboard = [["🔑 Ввести ключ компании"], ["🔙 В главное меню"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            "⚠️ **Доступ заблокирован!**\n\n"
+            "Для доступа к тренингу необходимо присоединиться к компании.\n\n"
+            "1. Получите ключ компании у администратора\n"
+            "2. Перейдите в 👤 Профиль → 🔑 Ввести ключ компании\n"
+            "3. Введите полученный ключ\n\n"
+            "После этого вы получите доступ ко всем функциям.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        return
+    
+    await show_training_catalog(update, context)
+
+    
+async def debug_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тестовая команда для отладки компании пользователя"""
+    user_id = update.message.from_user.id
+    from database import get_user_company, get_company_arc, check_user_arc_access
+    
+    user_company = get_user_company(user_id)
+    
+    if not user_company:
+        await update.message.reply_text("❌ **Нет компании**")
+        return
+    
+    company_arc = get_company_arc(user_company['company_id'])
+    
+    message = f"🏢 **Информация о компании пользователя**\n\n"
+    message += f"**Название:** {user_company['name']}\n"
+    message += f"**ID компании:** {user_company['company_id']}\n"
+    message += f"**Ключ:** `{user_company['join_key']}`\n"
+    message += f"**Цена:** {user_company['price']}₽\n"
+    message += f"**Дата старта:** {user_company['start_date']}\n"
+    
+    if company_arc:
+        message += f"\n**Информация о тренинге компании:**\n"
+        message += f"**ID арки компании:** {company_arc['company_arc_id']}\n"
+        message += f"**Старт тренинга:** {company_arc['actual_start_date']}\n"
+        message += f"**Окончание тренинга:** {company_arc['actual_end_date']}\n"
+        
+        # Проверяем доступ
+        has_access = check_user_arc_access(user_id, company_arc['company_arc_id'])
+        message += f"**Доступ пользователя:** {'✅ Есть' if has_access else '❌ Нет'}"
+    else:
+        message += f"\n**❌ У компании нет тренинга!**"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def test_real_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для создания тестового платежа 1₽"""
+    user_id = update.message.from_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Только для администратора")
+        return
+    
+    from database import create_yookassa_payment_with_receipt, get_user_company, get_company_arc
+    
+    # Получаем компанию пользователя
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ У вас нет компании")
+        return
+    
+    company_arc = get_company_arc(user_company['company_id'])
+    if not company_arc:
+        await update.message.reply_text("❌ У компании нет тренинга")
+        return
+    
+    # Создаем тестовый платеж на 1 рубль
+    test_amount = 1.00
+    
+    await update.message.reply_text("🔄 Создаю тестовый платеж 1₽...")
+    
+    payment_url, payment_id = create_yookassa_payment_with_receipt(
+        user_id, company_arc['company_arc_id'], test_amount, False, "Тестовый платеж 1₽"
+    )
+    
+    if payment_url:
+        keyboard = [
+            [InlineKeyboardButton("💳 Оплатить 1₽ (тест)", url=payment_url)],
+            [InlineKeyboardButton("✅ Я оплатил", callback_data=f"check_payment_{payment_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"💳 **Тестовый платеж 1₽ создан!**\n\n"
+            f"ID платежа: `{payment_id}`\n\n"
+            f"**Инструкция:**\n"
+            f"1. Нажмите '💳 Оплатить 1₽ (тест)'\n"
+            f"2. Оплатите 1 рубль в открывшемся окне\n"
+            f"3. Вернитесь в бот и нажмите '✅ Я оплатил'\n\n"
+            f"После этого система должна выдать вам доступ.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(f"❌ Ошибка создания платежа: {payment_id}")
+
+async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус платежа - С АВТОМАТИЧЕСКИМ ВОССТАНОВЛЕНИЕМ"""
+    query = update.callback_query
+    
+    print(f"🔍 DEBUG: check_payment_callback ВЫЗВАН!")
+    print(f"  Data: {query.data}")
+    print(f"  User ID: {query.from_user.id}")
+    
+    await query.answer()
+    
+    if query.data.startswith('check_payment_'):
+        payment_id = query.data.replace('check_payment_', '')
+        user_id = query.from_user.id
+        
+        print(f"🔍 DEBUG: Проверка платежа {payment_id} для пользователя {user_id}")
+        
+        try:
+            # 1. Проверяем статус через API Юкассы
+            import base64
+            import requests
+            from database import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_API_URL
+            
+            auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+            encoded_auth = base64.b64encode(auth_string.encode()).decode()
+            
+            headers = {
+                "Authorization": f"Basic {encoded_auth}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(f"{YOOKASSA_API_URL}/{payment_id}", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                payment_info = response.json()
+                status = payment_info.get("status")
+                amount_info = payment_info.get("amount", {})
+                amount = float(amount_info.get("value", 0))
+                
+                print(f"🔍 DEBUG: Статус платежа в Юкассе: {status}, Сумма: {amount}")
+                
+                # 2. Проверяем есть ли платеж в нашей БД
+                conn = sqlite3.connect('mentor_bot.db')
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT id, company_arc_id FROM payments WHERE yookassa_payment_id = ?", (payment_id,))
+                payment_db = cursor.fetchone()
+                
+                if not payment_db:
+                    print(f"⚠️  DEBUG: Платеж не найден в БД, пытаемся восстановить...")
+                    
+                    # Получаем company_arc_id из metadata или используем 1
+                    metadata = payment_info.get("metadata", {})
+                    company_arc_id = metadata.get("company_arc_id", 1)
+                    
+                    # Восстанавливаем платеж
+                    from database import save_payment
+                    db_id = save_payment(user_id, company_arc_id, amount, payment_id, status)
+                    
+                    if db_id:
+                        print(f"✅ DEBUG: Платеж восстановлен в БД с ID: {db_id}")
+                        payment_db = (db_id, company_arc_id)
+                    else:
+                        print(f"❌ DEBUG: Не удалось восстановить платеж в БД")
+                        await query.answer("Ошибка: платеж не найден в базе данных", show_alert=True)
+                        return
+                
+                db_id, company_arc_id = payment_db
+                
+                # 3. Обновляем статус в нашей БД
+                from database import update_payment_status
+                update_payment_status(payment_id, status)
+                
+                if status == 'succeeded':
+                    # 4. Выдаем доступ
+                    from database import grant_arc_access
+                    
+                    access_granted = grant_arc_access(user_id, company_arc_id, 'paid')
+                    
+                    if access_granted:
+                        # Получаем название компании для сообщения
+                        cursor.execute('''
+                            SELECT c.name as company_name
+                            FROM company_arcs ca
+                            JOIN companies c ON ca.company_id = c.company_id
+                            WHERE ca.company_arc_id = ?
+                        ''', (company_arc_id,))
+                        
+                        company_result = cursor.fetchone()
+                        company_name = company_result[0] if company_result else "вашей компании"
+                        
+                        conn.close()
+                        
+                        await query.edit_message_text(
+                            f"✅ **Оплата подтверждена!**\n\n"
+                            f"🏢 **Компания:** {company_name}\n"
+                            f"💰 **Сумма:** {amount}₽\n\n"
+                            f"Теперь вы можете начать обучение в разделе '📚 Мои задания'.",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await query.edit_message_text(
+                            f"✅ **Оплата подтверждена, но возникла проблема с доступом.**\n\n"
+                            f"Пожалуйста, нажмите /fixaccess чтобы получить доступ вручную.",
+                            parse_mode='Markdown'
+                        )
+                
+                elif status == 'pending':
+                    await query.answer(
+                        "⏳ Платеж еще не подтвержден банком.\n"
+                        "Обычно это занимает 1-2 минуты. Попробуйте через минуту.",
+                        show_alert=True
+                    )
+                
+                elif status == 'canceled':
+                    await query.edit_message_text(
+                        "❌ **Платеж отменен.**\n\n"
+                        "Попробуйте оплатить снова или обратитесь в поддержку.",
+                        parse_mode='Markdown'
+                    )
+                
+                else:
+                    await query.answer(f"Статус платежа: {status}", show_alert=True)
+            
+            elif response.status_code == 404:
+                await query.answer("Платеж не найден в системе Юкассы", show_alert=True)
+            
+            else:
+                error_msg = f"Ошибка API Юкассы: {response.status_code}"
+                await query.answer(error_msg, show_alert=True)
+        
+        except Exception as e:
+            error_msg = f"Ошибка проверки платежа: {str(e)}"
+            print(f"❌ DEBUG: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            await query.answer(error_msg, show_alert=True)
+
 
 def main():
     application = Application.builder().token(TOKEN).build()
@@ -11292,6 +11701,8 @@ def main():
     application.add_handler(CommandHandler("loadmediasimple", load_media_simple))
     application.add_handler(CommandHandler("loadallmedia", load_all_media))
     application.add_handler(CommandHandler("loadtests", load_tests_command))
+    application.add_handler(CommandHandler("debugcompany", debug_company))
+    application.add_handler(CommandHandler("test1rub", test_real_payment_command))
     
     
     print("Бот запущен...")
