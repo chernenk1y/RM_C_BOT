@@ -1,0 +1,786 @@
+2026-02-08 09:51:57,837 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 09:52:27,558 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 147, in start
+    if has_any_access(user.id) or user.id == ADMIN_ID:
+       ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5003, in has_any_access
+    cursor.execute('SELECT 1 FROM user_arc_access WHERE user_id = ? LIMIT 1', (user_id,))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 10:18:15,896 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 10:18:26,448 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 147, in start
+    if has_any_access(user.id) or user.id == ADMIN_ID:
+       ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5003, in has_any_access
+    cursor.execute('SELECT 1 FROM user_arc_access WHERE user_id = ? LIMIT 1', (user_id,))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 10:19:37,703 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 10:49:43,216 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 13:22:51,273 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 13:31:52,597 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 13:39:19,006 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 13:58:40,258 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 13:59:51,061 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 14:23:15,146 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 14:23:25,949 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 14:24:40,331 - __main__ - ERROR - Exception while handling an update: httpx.ConnectError: [SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1077)
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection.py", line 101, in handle_async_request
+    raise exc
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection.py", line 156, in _connect
+    stream = await stream.start_tls(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_backends\anyio.py", line 67, in start_tls
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1077)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1077)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 724, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2034, in handle_text
+    await create_company_process(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1242, in create_company_process
+    await update.message.reply_text(
+    ...<9 lines>...
+    )
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 2060, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 3107, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 1118, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1077)
+2026-02-08 14:46:34,570 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 14:46:45,108 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 14:53:19,652 - __main__ - ERROR - Exception while handling an update: ambiguous column name: company_id
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 505, in handle_buttons
+    await show_companies_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1460, in show_companies_list
+    companies = get_all_companies()
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4550, in get_all_companies
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT company_id, name, join_key, start_date,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        ORDER BY c.created_at DESC
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+sqlite3.OperationalError: ambiguous column name: company_id
+2026-02-08 15:00:17,192 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:00:27,730 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:00:47,555 - __main__ - ERROR - Exception while handling an update: 'price'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 505, in handle_buttons
+    await show_companies_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1481, in show_companies_list
+    message += f"   💰 Цена: {company['price']}₽\n"
+                              ~~~~~~~^^^^^^^^^
+KeyError: 'price'
+2026-02-08 15:03:28,133 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:03:38,937 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:29:57,865 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 518, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1624, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1628, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 15:34:57,423 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 518, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1624, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1628, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 15:45:50,359 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:46:01,165 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:46:29,630 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1628, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 15:52:03,727 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4760, in manage_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT u.user_id,
+        ^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+        LIMIT 50
+        ^^^^^^^^
+    ''')
+    ^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 15:52:22,760 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1628, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 15:58:25,537 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:58:36,338 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 15:58:50,905 - __main__ - ERROR - Exception while handling an update: no such table: user_arc_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1628, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_arc_access
+2026-02-08 16:00:02,145 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:22:34,993 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:33:17,037 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:33:18,293 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-08 16:33:22,378 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-08 16:33:27,514 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:33:33,293 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:42:54,155 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:44:05,013 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:46:05,429 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4687, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 16:46:19,957 - __main__ - ERROR - Exception while handling an update: no such column: uaa.arc_id
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1615, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: uaa.arc_id
+2026-02-08 16:49:22,536 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4687, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 16:57:47,677 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:58:29,760 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:58:40,564 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 16:58:44,992 - __main__ - ERROR - Exception while handling an update: no such column: uaa.arc_id
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1616, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: uaa.arc_id
+2026-02-08 16:59:10,894 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4688, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 16:59:55,818 - __main__ - ERROR - Exception while handling an update: no such column: uaa.arc_id
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1633, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 1616, in check_and_open_missed_days
+    cursor.execute(f'''
+    ~~~~~~~~~~~~~~^^^^^
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE uaa.user_id = ? AND a.status = 'active'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: uaa.arc_id
+2026-02-08 16:59:56,643 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4688, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:07:59,845 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 17:08:29,040 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 17:09:39,829 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 17:11:36,182 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:11:48,908 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1721, in show_available_assignments
+    has_access, message = check_user_company_access(user_id)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:12:06,211 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1721, in show_available_assignments
+    has_access, message = check_user_company_access(user_id)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:12:09,436 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:12:26,429 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 334, in handle_buttons
+    await show_course_main(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 4214, in show_course_main
+    has_access, _ = check_user_company_access(user_id)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 17:12:29,371 - __main__ - ERROR - Exception while handling an update: no such table: user_company_access
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 527, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1721, in show_available_assignments
+    has_access, message = check_user_company_access(user_id)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4701, in check_user_company_access
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT 1 FROM user_company_access
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND company_arc_id = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, company_arc_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user_company_access
+2026-02-08 19:02:54,399 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:03:05,227 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:12:21,016 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:12:31,559 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:17:15,543 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:17:26,365 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:20:12,372 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:20:23,194 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:22:48,476 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:22:59,017 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:57:32,273 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 19:57:43,095 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 20:05:23,866 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 20:05:34,693 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 20:07:31,192 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-08 20:07:42,002 - bot - INFO - === Бот запущен с логированием платежей ===

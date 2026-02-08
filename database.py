@@ -1,0 +1,4689 @@
+import sqlite3
+from datetime import time, datetime, timedelta
+import json
+import uuid
+import requests
+import pandas as pd
+import logging
+
+db_logger = logging.getLogger('database')
+
+# Добавь в начало database.py после импортов:
+
+# === ЮКАССА КОНФИГ ===
+YOOKASSA_SHOP_ID = "1237681"
+YOOKASSA_SECRET_KEY = "live_-Qdq_6lyDp0c1ck5HkZ_xLw5ZFtO5s7oyJquVI7hweA"
+YOOKASSA_RETURN_URL = "https://t.me/SVS_365_bot"
+YOOKASSA_WEBHOOK_URL = "https://svs365bot.ru/webhook/yookassa"
+YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments"
+
+# Базовые заголовки для запросов
+yookassa_headers = {
+    "Content-Type": "application/json",
+    "Idempotence-Key": "",
+    "Authorization": ""
+}
+
+# Словарь городов и их таймзон (смещение от МСК)
+CITY_TIMEZONES = {
+    "Калининград (-1)": -1,      # МСК-1
+    "Москва (+0)": 0,           # МСК+0
+    "Самара (+1)": 1,           # МСК+1
+    "Екатеринбург (+2)": 2,     # МСК+2
+    "Омск (+3)": 3,             # МСК+3
+    "Новосибирск (+4)": 4,      # МСК+4
+    "Красноярск (+4)": 4,       # МСК+4
+    "Иркутск (+5)": 5,          # МСК+5
+    "Якутск (+6)": 6,           # МСК+6
+    "Владивосток (+7)": 7,     # МСК+7
+    "Магадан (+8)": 8,         # МСК+8
+    "Камчатка (+9)": 9         # МСК+9
+}
+
+def get_available_cities():
+    """Возвращает список доступных городов"""
+    return list(CITY_TIMEZONES.keys())
+
+def get_user_local_time(user_id):
+    """Возвращает время пользователя с учетом его таймзоны (относительно МСК)"""
+    from bot import get_moscow_time  # Импортируем из bot.py
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT timezone_offset FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0] is not None:
+        timezone_offset = result[0]
+        # Берем московское время как базовое
+        moscow_time = get_moscow_time()
+        return moscow_time + timedelta(hours=timezone_offset)
+    else:
+        return get_moscow_time()
+
+def set_user_timezone(user_id, city, timezone_offset):
+    """Устанавливает город и таймзону пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE users SET city = ?, timezone_offset = ? 
+        WHERE user_id = ?
+    ''', (city, timezone_offset, user_id))
+    
+    conn.commit()
+    conn.close()
+
+def is_day_available(user_id, day_id):
+    """Проверяет доступен ли день пользователю"""
+    user_time = get_user_local_time(user_id)
+    return user_time.hour >= 0  # Доступно с 00:00 местного времени
+
+def is_assignment_available(user_id, assignment_id):
+    """Проверяет доступно ли задание до 12:00 местного времени"""
+    user_time = get_user_local_time(user_id)
+    return user_time.hour < 23  # Доступно до 22:00
+
+def get_user_current_day(user_id, arc_id):
+    """Определяет текущий день дуги для пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем дату начала доступа к дуге
+    cursor.execute('''
+        SELECT purchased_at FROM user_arc_access 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        start_date = datetime.fromisoformat(result[0])
+        user_time = get_user_local_time(user_id)
+        days_passed = (user_time.date() - start_date.date()).days
+        return min(days_passed + 1, 40)  # Не больше 40 дней
+    else:
+        return 1  # Первый день по умолчанию
+
+def save_assignment_answer(user_id, assignment_id, answer_text, answer_files):
+    """Сохраняет ответ на задание (текст + файлы)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сохраняем файлы как JSON
+    files_json = json.dumps(answer_files) if answer_files else None
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_progress_advanced 
+        (user_id, assignment_id, answer_text, answer_files, status, viewed_by_student)
+        VALUES (?, ?, ?, ?, ?, 0)
+    ''', (user_id, assignment_id, answer_text, files_json, 'submitted'))
+    
+    conn.commit()
+    conn.close()
+
+def get_user_assignments_for_day(user_id, day_id):
+    """Получает все задания для дня пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT a.assignment_id, a.title, a.content_text,
+               up.status, up.teacher_comment
+        FROM assignments a
+        LEFT JOIN user_progress_advanced up ON a.assignment_id = up.assignment_id AND up.user_id = ?
+        WHERE a.day_id = ?
+        ORDER BY a.assignment_id
+    ''', (user_id, day_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def update_daily_stats(user_id, arc_id, day_id, completed_count):
+    """Обновляет статистику дня (пропуск/выполнение)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    total_assignments = get_day_assignments_count(day_id)
+    is_skipped = completed_count < total_assignments / 2
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_daily_stats 
+        (user_id, arc_id, day_id, date, assignments_completed, is_skipped)
+        VALUES (?, ?, ?, DATE('now'), ?, ?)
+    ''', (user_id, arc_id, day_id, completed_count, is_skipped))
+    
+    conn.commit()
+    conn.close()
+
+def get_day_assignments_count(day_id):
+    """Возвращает количество заданий в дне"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM assignments WHERE day_id = ?', (day_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def init_db():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    print("🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ С КОМПАНИЯМИ (НОВАЯ СТРУКТУРА)")
+    print("=" * 50)
+
+    # ★★★ КУРСЫ И АРКИ ★★★
+    
+    # Курсы
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS courses (
+            course_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT
+        )
+    ''')
+    print("✅ Таблица courses создана/проверена")
+    
+    # Арки (стандартные шаблоны тренингов)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS arcs (
+            arc_id INTEGER PRIMARY KEY,
+            course_id INTEGER,
+            title TEXT,
+            order_num INTEGER,
+            price INTEGER,
+            дата_начала DATE,
+            дата_окончания DATE,
+            бесплатный_период INTEGER DEFAULT 7,
+            status TEXT DEFAULT 'active',
+            is_available BOOLEAN DEFAULT 1,
+            FOREIGN KEY (course_id) REFERENCES courses(course_id)
+        )
+    ''')
+    print("✅ Таблица arcs создана/проверена")
+    
+    # ★★★ КОМПАНИИ ★★★
+    
+    # Компании
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS companies (
+            company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            join_key TEXT UNIQUE NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE,
+            tg_group_link TEXT,
+            admin_email TEXT,
+            price INTEGER NOT NULL DEFAULT 0,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            FOREIGN KEY (created_by) REFERENCES users(user_id)
+        )
+    ''')
+    print("✅ Таблица companies создана/проверена")
+    
+    # Арки компаний (связь компания + стандартный тренинг)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS company_arcs (
+            company_arc_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            arc_id INTEGER NOT NULL,
+            actual_start_date DATE NOT NULL,
+            actual_end_date DATE,
+            status TEXT DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(company_id),
+            FOREIGN KEY (arc_id) REFERENCES arcs(arc_id),
+            UNIQUE(company_id, arc_id)
+        )
+    ''')
+    print("✅ Таблица company_arcs создана/проверена")
+    
+    # ★★★ ПОЛЬЗОВАТЕЛИ ★★★
+    
+    # Пользователи
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            fio TEXT,
+            city TEXT,
+            timezone_offset INTEGER DEFAULT 0,
+            phone TEXT,
+            accepted_offer BOOLEAN DEFAULT 0,
+            accepted_offer_date TEXT,
+            accepted_service_offer BOOLEAN DEFAULT 0,
+            accepted_service_offer_date TEXT,
+            is_admin BOOLEAN DEFAULT 0,
+            is_blocked BOOLEAN DEFAULT 0,
+            current_company_id INTEGER,  -- Текущая компания пользователя
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    print("✅ Таблица users создана/проверена")
+    
+    # Привязка пользователей к компаниям
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_companies (
+            user_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            PRIMARY KEY (user_id, company_id),
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_id) REFERENCES companies(company_id)
+        )
+    ''')
+    print("✅ Таблица user_companies создана/проверена")
+    
+    # ★★★ ТАБЛИЦА ДОСТУПОВ - ВОЗВРАЩАЕМ СТАРОЕ НАЗВАНИЕ! ★★★
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_arc_access (
+            access_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            arc_id INTEGER,  -- ★ СТАРАЯ КОЛОНКА для совместимости
+            company_arc_id INTEGER, -- ★ НОВАЯ КОЛОНКА для компаний
+            access_type TEXT DEFAULT 'paid',
+            purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id),
+            CHECK (arc_id IS NOT NULL OR company_arc_id IS NOT NULL), -- Хотя бы одна заполнена
+            UNIQUE(user_id, arc_id, company_arc_id)
+        )
+    ''')
+    print("✅ Таблица user_arc_access создана с поддержкой компаний")
+    
+    # ★★★ СТРУКТУРА ТРЕНИНГА ★★★
+    
+    # Дни тренинга (стандартные для arc_id=1)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS days (
+            day_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            arc_id INTEGER,
+            title TEXT NOT NULL,
+            order_num INTEGER,
+            FOREIGN KEY (arc_id) REFERENCES arcs (arc_id)
+        )
+    ''')
+    print("✅ Таблица days создана/проверена")
+    
+    # Задания
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS assignments (
+            assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            order_num INTEGER UNIQUE,
+            course_id INTEGER DEFAULT 1,
+            day_id INTEGER,
+            content_text TEXT,
+            content_files TEXT,
+            content_photos TEXT,
+            content_audios TEXT,
+            video_url TEXT,
+            FOREIGN KEY (course_id) REFERENCES courses (course_id),
+            FOREIGN KEY (day_id) REFERENCES days (day_id)
+        )
+    ''')
+    print("✅ Таблица assignments создана/проверена")
+    
+    # ★★★ ПЛАТЕЖИ ★★★
+    
+    # Платежи
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            company_arc_id INTEGER NOT NULL,  -- ★ Связь с аркой компании
+            amount REAL NOT NULL,
+            status TEXT DEFAULT 'pending',
+            yookassa_payment_id TEXT UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            metadata TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
+        )
+    ''')
+    print("✅ Таблица payments создана/проверена")
+    
+    # ★★★ ПРОГРЕСС И СТАТИСТИКА ★★★
+    
+    # Прогресс пользователей
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_progress_advanced (
+            user_id INTEGER,
+            assignment_id INTEGER,
+            status TEXT DEFAULT 'submitted', -- 'submitted', 'approved', 'rejected'
+            answer_text TEXT,
+            answer_files TEXT, -- JSON с file_id
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            teacher_comment TEXT,
+            viewed_by_student BOOLEAN DEFAULT 0,
+            has_additional_comment BOOLEAN DEFAULT 0,
+            additional_comment TEXT,
+            additional_comment_viewed BOOLEAN DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (assignment_id) REFERENCES assignments (assignment_id),
+            PRIMARY KEY (user_id, assignment_id)
+        )
+    ''')
+    print("✅ Таблица user_progress_advanced создана/проверена")
+    
+    # Статистика дней
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_daily_stats (
+            user_id INTEGER,
+            company_arc_id INTEGER,  -- ★ Связь с аркой компании
+            day_id INTEGER,
+            date DATE,
+            assignments_completed INTEGER DEFAULT 0,
+            is_skipped BOOLEAN DEFAULT FALSE,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs (company_arc_id),
+            FOREIGN KEY (day_id) REFERENCES days (day_id),
+            PRIMARY KEY (user_id, day_id)
+        )
+    ''')
+    print("✅ Таблица user_daily_stats создана/проверена")
+    
+    # ★★★ ДОПОЛНИТЕЛЬНЫЕ ТАБЛИЦЫ ★★★
+    
+    # Бесплатные доступы
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS free_access_grants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            company_arc_id INTEGER,  -- ★ Связь с аркой компании
+            granted_by INTEGER,
+            granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs (company_arc_id)
+        )
+    ''')
+    print("✅ Таблица free_access_grants создана/проверена")
+    
+    # Логи уведомлений
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notification_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER,
+            recipient_type TEXT,
+            text TEXT,
+            photo_id TEXT,
+            success_count INTEGER,
+            fail_count INTEGER,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (admin_id) REFERENCES users(user_id)
+        )
+    ''')
+    print("✅ Таблица notification_logs создана/проверена")
+    
+    # Тесты
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tests (
+            test_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_num INTEGER NOT NULL,
+            question_text TEXT NOT NULL,
+            option1 TEXT,
+            option2 TEXT,
+            option3 TEXT,
+            option4 TEXT,
+            option5 TEXT,
+            correct_option TEXT NOT NULL,
+            explanation TEXT,
+            UNIQUE(week_num, question_text)
+        )
+    ''')
+    print("✅ Таблица tests создана/проверена")
+    
+    # Результаты тестов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS test_results (
+            result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            company_arc_id INTEGER NOT NULL,  -- ★ Связь с аркой компании
+            week_num INTEGER NOT NULL,
+            score INTEGER,
+            answers_json TEXT NOT NULL,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id),
+            UNIQUE(user_id, company_arc_id, week_num)
+        )
+    ''')
+    print("✅ Таблица test_results создана/проверена")
+    
+    # Прогресс тестов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS test_progress (
+            progress_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            company_arc_id INTEGER NOT NULL,  -- ★ Связь с аркой компании
+            week_num INTEGER NOT NULL,
+            current_question INTEGER DEFAULT 1,
+            answers_json TEXT,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id),
+            UNIQUE(user_id, company_arc_id, week_num)
+        )
+    ''')
+    print("✅ Таблица test_progress создана/проверена")
+    
+    # ★★★ ОБЯЗАТЕЛЬНО: СОЗДАЕМ СТАНДАРТНЫЙ ТРЕНИНГ ★★★
+    
+    # Проверяем есть ли стандартный тренинг
+    cursor.execute('SELECT 1 FROM arcs WHERE arc_id = 1')
+    if not cursor.fetchone():
+        print("📦 Создаю стандартный 8-недельный тренинг (arc_id=1)...")
+        cursor.execute('''
+            INSERT INTO arcs (arc_id, course_id, title, order_num, price, дата_начала, дата_окончания)
+            VALUES (1, 1, 'Стандартный 8-недельный тренинг', 1, 0, '2026-01-01', '2026-12-31')
+        ''')
+        print("✅ Стандартный тренинг создан")
+    
+    conn.commit()
+    conn.close()
+    
+    print("=" * 50)
+    print("🎉 БАЗА ДАННЫХ ГОТОВА К РАБОТЕ С КОМПАНИЯМИ")
+    print("=" * 50)
+    
+    # ★★★ ОБНОВЛЯЕМ ВАЖНЫЕ ФУНКЦИИ ★★★
+    update_key_functions()
+
+def update_key_functions():
+    """Обновляет ключевые функции для работы с новой структурой"""
+    
+    print("\n🔄 ОБНОВЛЕНИЕ КЛЮЧЕВЫХ ФУНКЦИЙ")
+    print("=" * 50)
+    
+    # Обновляем функцию check_user_arc_access чтобы она понимала новую структуру
+    print("✅ Функции обновлены для работы с company_arc_id")
+    print("   • check_user_arc_access теперь проверяет доступ к арке компании")
+    print("   • grant_arc_access выдает доступ к арке компании")
+    print("   • get_user_active_arcs работает с компаниями")
+    print("=" * 50)
+
+# В функции add_user добавляем новое поле
+def add_user(user_id, username, first_name):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сначала проверяем, есть ли пользователь
+    cursor.execute('SELECT 1 FROM users WHERE user_id = ?', (user_id,))
+    exists = cursor.fetchone()
+    
+    if not exists:
+        # Новый пользователь
+        cursor.execute('''
+            INSERT INTO users (user_id, username, first_name, accepted_offer, created_at)
+            VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+        ''', (user_id, username, first_name))
+        print(f"✅ Новый пользователь: {user_id}")
+    else:
+        # Существующий - обновляем только username/first_name
+        cursor.execute('''
+            UPDATE users 
+            SET username = ?, first_name = ?
+            WHERE user_id = ?
+        ''', (username, first_name, user_id))
+        print(f"🔄 Обновлен пользователь: {user_id}")
+    
+    conn.commit()
+    conn.close()
+
+def init_assignments():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS assignments (
+            assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            order_num INTEGER UNIQUE
+        )
+    ''')
+    
+    # Добавляем тестовые задания
+    assignments = [
+        ("Задание 1: Психология", "Работа первая", 1),
+        ("Задание 2: Психология", "Работа вторая", 2),
+        ("Задание 3: Психология", "Работа третья", 3)
+    ]
+    
+    cursor.executemany('''
+        INSERT OR IGNORE INTO assignments (title, description, order_num)
+        VALUES (?, ?, ?)
+    ''', assignments)
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_progress (
+            user_id INTEGER,
+            assignment_id INTEGER,
+            status TEXT DEFAULT 'locked',
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (assignment_id) REFERENCES assignments (assignment_id)
+        )
+    ''')
+
+    # ★★★ ДОБАВЛЯЕМ ТЕСТОВЫЙ КУРС ★★★
+    cursor.execute('''
+        INSERT OR IGNORE INTO courses (course_id, title, description)
+        VALUES (1, 'Психология', 'Курс по основам психологии')
+    ''')
+    
+    # ★★★ ДОБАВЛЯЕМ ПОЛЕ course_id В ТАБЛИЦУ ЗАДАНИЙ ★★★
+    try:
+        cursor.execute('ALTER TABLE assignments ADD COLUMN course_id INTEGER DEFAULT 1')
+    except sqlite3.OperationalError:
+        pass  # Поле уже существует
+
+    # ★★★ СОЗДАЕМ ТЕСТОВЫЕ ДНИ ДЛЯ ДУГ ★★★
+    # Получаем ID дуг
+    cursor.execute('SELECT arc_id FROM arcs')
+    arcs = cursor.fetchall()
+    
+    for arc_id, in arcs:
+        # Создаем 5 тестовых дней для каждой дуги
+        for day_num in range(1, 6):
+            cursor.execute('''
+                INSERT OR IGNORE INTO days (arc_id, title, order_num)
+                VALUES (?, ?, ?)
+            ''', (arc_id, f"День {day_num}", day_num))
+
+    # ★★★ ДОБАВЛЯЕМ ТЕСТОВЫЕ ЗАДАНИЯ ★★★
+    # Получаем ID дней
+    cursor.execute('SELECT day_id FROM days LIMIT 5')  # Первые 5 дней
+    days = cursor.fetchall()
+    
+    for day_id, in days:
+        # Создаем 2 задания для каждого дня
+        cursor.execute('''
+            INSERT OR IGNORE INTO assignments (day_id, title, content_text, content_files)
+            VALUES (?, ?, ?, ?)
+        ''', (day_id, "Задание 1", "Опиши свои чувства и мысли сегодня...", None))
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO assignments (day_id, title, content_text, content_files)
+            VALUES (?, ?, ?, ?)
+        ''', (day_id, "Задание 2", "Сделай упражнение на осознанность...", None))
+    
+    conn.commit()
+    conn.close()
+
+def get_current_assignment(user_id):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT a.assignment_id, a.title, a.description 
+        FROM assignments a
+        LEFT JOIN user_progress up ON a.assignment_id = up.assignment_id AND up.user_id = ?
+        WHERE up.status IS NULL OR up.status != 'approved'
+        ORDER BY a.order_num
+        LIMIT 1
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+def save_submission(user_id, assignment_id, file_id):
+    print("=== DEBUG SAVE_SUBMISSION START ===")
+    print("Params:", user_id, assignment_id, file_id)
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_progress 
+        (user_id, assignment_id, status, file_id) 
+        VALUES (?, ?, 'submitted', ?)
+    ''', (user_id, assignment_id, file_id))
+    
+    conn.commit()
+    conn.close()
+    print("=== DEBUG SAVE_SUBMISSION END ===")
+
+def get_submissions():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.user_id, u.username, a.title, up.assignment_id
+        FROM user_progress up
+        JOIN users u ON up.user_id = u.user_id
+        JOIN assignments a ON up.assignment_id = a.assignment_id
+        WHERE up.status = 'submitted'
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def update_submission(user_id, assignment_id, status):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE user_progress 
+        SET status = ?
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (status, user_id, assignment_id))
+    
+    conn.commit()
+    conn.close()
+
+def get_submission_file(user_id, assignment_id):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT file_id FROM user_progress 
+        WHERE user_id = ? AND assignment_id = ? AND status = 'submitted'
+    ''', (user_id, assignment_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+# Новая функция проверки оплаты
+def check_payment(user_id, course_id=1):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 1 FROM payments 
+        WHERE user_id = ? AND course_id = ?
+    ''', (user_id, course_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+# Функция имитации оплаты
+def add_payment(user_id, course_id=1):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO payments (user_id, course_id)
+        VALUES (?, ?)
+    ''', (user_id, course_id))
+    
+    conn.commit()
+    conn.close()
+
+def get_students_with_submissions():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            u.user_id,
+            u.username,
+            u.first_name,
+            COUNT(af.id) as total_files,
+            -- ★★★ ПРОСТАЯ ЛОГИКА: есть ли непроверенные файлы ★★★
+            EXISTS(SELECT 1 FROM assignment_files WHERE user_id = u.user_id AND status = 'submitted') as has_new_files,
+            -- ★★★ Все ли файлы приняты ★★★
+            NOT EXISTS(SELECT 1 FROM assignment_files WHERE user_id = u.user_id AND status != 'approved') as all_approved
+        FROM users u
+        JOIN assignment_files af ON u.user_id = af.user_id
+        WHERE af.file_id IS NOT NULL
+        GROUP BY u.user_id
+        HAVING COUNT(af.id) > 0
+        ORDER BY has_new_files DESC, u.user_id
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def upgrade_database():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('ALTER TABLE user_progress ADD COLUMN submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    except sqlite3.OperationalError:
+        pass  # Поле уже существует
+    
+    conn.commit()
+    conn.close()
+
+def get_student_submissions(user_id):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # ★★★ УПРОЩЕННЫЙ ЗАПРОС БЕЗ СЛОЖНЫХ ПОДЗАПРОСОВ ★★★
+    cursor.execute('''
+        SELECT 
+            af.id as file_db_id,
+            a.assignment_id,
+            a.title,
+            af.status,
+            af.file_id as telegram_file_id,
+            af.created_at
+        FROM assignments a
+        JOIN assignment_files af ON a.assignment_id = af.assignment_id 
+        WHERE af.user_id = ? AND af.file_id IS NOT NULL
+        ORDER BY a.order_num, af.created_at
+    ''', (user_id,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def upgrade_database():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('ALTER TABLE user_progress ADD COLUMN submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE user_progress ADD COLUMN file_id TEXT')  # ← ДОБАВЬ ЭТУ СТРОКУ
+    except sqlite3.OperationalError:
+        pass
+    
+    conn.commit()
+    conn.close()
+
+def create_test_submission():
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Просто берем первого пользователя
+    cursor.execute('SELECT user_id FROM users LIMIT 1')
+    user_result = cursor.fetchone()
+    
+    if user_result:
+        user_id = user_result[0]
+        cursor.execute('SELECT assignment_id FROM assignments ORDER BY order_num LIMIT 1')
+        assignment_result = cursor.fetchone()
+        
+        if assignment_result:
+            assignment_id = assignment_result[0]
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_progress 
+                (user_id, assignment_id, status, file_id) 
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, assignment_id, 'submitted', 'test_file_id'))
+    
+    conn.commit()
+    conn.close()
+
+def save_assignment_file(user_id, assignment_id, file_id):
+    """Сохраняет файл в новую таблицу для нескольких файлов"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO assignment_files (user_id, assignment_id, file_id)
+        VALUES (?, ?, ?)
+    ''', (user_id, assignment_id, file_id))
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Файл сохранен в assignment_files: user={user_id}, assignment={assignment_id}")
+
+def get_assignment_files(user_id, assignment_id):
+    """Получает все файлы для конкретного задания пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, file_id, status, created_at
+        FROM assignment_files 
+        WHERE user_id = ? AND assignment_id = ?
+        ORDER BY created_at DESC
+    ''', (user_id, assignment_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_assignment_file_count(user_id, assignment_id):
+    """Получает количество файлов для задания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) FROM assignment_files 
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (user_id, assignment_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def get_course_status(user_id):
+    """Получает статусы курсов для ученика"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            c.course_id,
+            c.title,
+            -- Есть ли непроверенные файлы в курсе
+            EXISTS(SELECT 1 
+                  FROM assignment_files af 
+                  JOIN assignments a ON af.assignment_id = a.assignment_id 
+                  WHERE af.user_id = ? AND a.course_id = c.course_id AND af.status = 'submitted') as has_new_files,
+            -- Все ли файлы приняты в курсе
+            NOT EXISTS(SELECT 1 
+                      FROM assignment_files af 
+                      JOIN assignments a ON af.assignment_id = a.assignment_id 
+                      WHERE af.user_id = ? AND a.course_id = c.course_id AND af.status != 'approved') as all_approved,
+            COUNT(af.id) as total_files
+        FROM courses c
+        LEFT JOIN assignments a ON c.course_id = a.course_id
+        LEFT JOIN assignment_files af ON a.assignment_id = af.assignment_id AND af.user_id = ?
+        WHERE af.id IS NOT NULL
+        GROUP BY c.course_id
+        HAVING COUNT(af.id) > 0
+    ''', (user_id, user_id, user_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_assignment_status(user_id, course_title):
+    """Получает статусы заданий в курсе"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            a.assignment_id,
+            a.title,
+            -- Есть ли непроверенные файлы в задании
+            EXISTS(SELECT 1 
+                  FROM assignment_files af 
+                  WHERE af.user_id = ? AND af.assignment_id = a.assignment_id AND af.status = 'submitted') as has_new_files,
+            -- Все ли файлы приняты в задании
+            NOT EXISTS(SELECT 1 
+                      FROM assignment_files af 
+                      WHERE af.user_id = ? AND af.assignment_id = a.assignment_id AND af.status != 'approved') as all_approved,
+            COUNT(af.id) as total_files
+        FROM assignments a
+        JOIN courses c ON a.course_id = c.course_id
+        LEFT JOIN assignment_files af ON a.assignment_id = af.assignment_id AND af.user_id = ?
+        WHERE c.title = ? AND af.id IS NOT NULL
+        GROUP BY a.assignment_id
+        HAVING COUNT(af.id) > 0
+    ''', (user_id, user_id, user_id, course_title))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def check_user_arc_access(user_id, arc_id):
+    """Проверяет доступ - работает и со старым arc_id и с новым company_arc_id"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        if arc_id < 1000:  # Старый arc_id
+            cursor.execute('''
+                SELECT 1 FROM user_arc_access 
+                WHERE user_id = ? AND arc_id = ?
+            ''', (user_id, arc_id))
+        else:  # Новый company_arc_id
+            cursor.execute('''
+                SELECT 1 FROM user_arc_access 
+                WHERE user_id = ? AND company_arc_id = ?
+            ''', (user_id, arc_id))
+        
+        result = cursor.fetchone()
+        return result is not None
+        
+    except Exception as e:
+        print(f"🚨 Ошибка проверки доступа: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_user_skip_days(user_id, arc_id):
+    """Возвращает количество пропущенных дней в дуге"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) FROM user_daily_stats 
+        WHERE user_id = ? AND arc_id = ? AND is_skipped = 1
+    ''', (user_id, arc_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def get_users_with_skipped_days():
+    """Возвращает учеников с пропущенными днями"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.user_id, u.fio, u.username, u.is_blocked,
+               COUNT(CASE WHEN uds.is_skipped = 1 THEN 1 END) as skip_days
+        FROM users u
+        JOIN user_daily_stats uds ON u.user_id = uds.user_id
+        WHERE uds.is_skipped = 1
+        GROUP BY u.user_id
+        HAVING skip_days > 0
+        ORDER BY skip_days DESC
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def block_user(user_id):
+    """Блокирует пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('UPDATE users SET is_blocked = 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def unblock_user(user_id):
+    """Разблокирует пользователя и сбрасывает пропуски"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('UPDATE users SET is_blocked = 0 WHERE user_id = ?', (user_id,))
+    
+    # Сбрасываем пропуски для текущей дуги
+    cursor.execute('''
+        UPDATE user_daily_stats SET is_skipped = 0 
+        WHERE user_id = ? AND date >= DATE('now', '-30 days')
+    ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+def test_new_structure():
+    """Тестирует новую структуру БД"""
+    print("🧪 Тестирование новой структуры БД...")
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Проверяем существование новых таблиц
+    tables = ['arcs', 'days', 'user_arc_access', 'user_progress_advanced', 'user_daily_stats', 'free_access_grants']
+    
+    for table in tables:
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+        exists = cursor.fetchone()
+        print(f"✅ Таблица {table}: {'СОЗДАНА' if exists else 'ОТСУТСТВУЕТ'}")
+    
+    # Проверяем новые поля в users
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in cursor.fetchall()]
+    new_fields = ['fio', 'city', 'timezone_offset', 'is_blocked']
+    
+    for field in new_fields:
+        print(f"✅ Поле {field} в users: {'ЕСТЬ' if field in columns else 'ОТСУТСТВУЕТ'}")
+    
+    conn.close()
+    print("🧪 Тестирование завершено!")
+
+# ★★★ ВЫЗЫВАЕМ ПРИ ЗАПУСКЕ ★★★
+if __name__ == "__main__":
+    init_db()
+    init_assignments()
+    test_new_structure()
+
+def add_test_access(user_id):
+    """Добавляет тестовый доступ к первой дуге для тестирования"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем ID первой дуги
+    cursor.execute('SELECT arc_id FROM arcs ORDER BY arc_id LIMIT 1')
+    arc_result = cursor.fetchone()
+    
+    if arc_result:
+        arc_id = arc_result[0]
+        # Добавляем доступ
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_arc_access (user_id, arc_id, access_type)
+            VALUES (?, ?, 'free')
+        ''', (user_id, arc_id))
+    
+    conn.commit()
+    conn.close()
+
+
+def load_courses_from_excel():
+    """Загружает данные курсов из Excel файла - ПОЛНАЯ ВЕРСИЯ с поддержкой медиа"""
+    print("📥 Загружаем данные из Excel...")
+    
+    try:
+        excel_file = 'courses_data.xlsx'
+        
+        # 1. Загружаем курсы
+        df_courses = pd.read_excel(excel_file, sheet_name='Курсы')
+        print(f"📚 Найдено курсов: {len(df_courses)}")
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        # Очищаем таблицы
+        cursor.execute('DELETE FROM courses')
+        cursor.execute('DELETE FROM arcs')
+        cursor.execute('DELETE FROM days')
+        cursor.execute('DELETE FROM assignments')
+        
+        # 2. Загружаем курсы
+        for _, row in df_courses.iterrows():
+            cursor.execute('''
+                INSERT INTO courses (course_id, title, description, status)
+                VALUES (?, ?, ?, ?)
+            ''', (row['id'], row['название'], row['описание'], row['статус']))
+        
+        print(f"✅ Загружено {len(df_courses)} курсов")
+        
+        # 3. Загружаем дуги
+        df_arcs = pd.read_excel(excel_file, sheet_name='Дуги')
+        print(f"🔄 Найдено дуг: {len(df_arcs)}")
+        
+        for _, row in df_arcs.iterrows():
+            cursor.execute('''
+                INSERT INTO arcs 
+                (arc_id, course_id, title, order_num, price, 
+                 дата_начала, дата_окончания, бесплатный_период, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                row['id'], 
+                row['id_курса'], 
+                row['название'],
+                row['порядок'], 
+                row['цена'],
+                row['дата_начала'], 
+                row['дата_окончания'],
+                row['бесплатный_период'],
+                row['статус']
+            ))
+        
+        print(f"✅ Загружено {len(df_arcs)} дуг")
+        
+        # 4. ★★★ ЗАГРУЖАЕМ ДНИ ★★★
+        try:
+            df_days = pd.read_excel(excel_file, sheet_name='Дни')
+            print(f"📅 Найдено дней: {len(df_days)}")
+            
+            days_loaded = 0
+            for _, row in df_days.iterrows():
+                try:
+                    cursor.execute('''
+                        INSERT INTO days (day_id, arc_id, title, order_num)
+                        VALUES (?, ?, ?, ?)
+                    ''', (
+                        row['id'],
+                        row['id_дуги'],
+                        row['название'],
+                        row['порядок']
+                    ))
+                    days_loaded += 1
+                except Exception as e:
+                    print(f"⚠️ Ошибка загрузки дня {row['id']}: {e}")
+            
+            print(f"✅ Загружено {days_loaded} дней")
+            
+        except Exception as e:
+            print(f"❌ Ошибка загрузки дней: {e}")
+        
+        # 5. ★★★ ЗАГРУЖАЕМ ЗАДАНИЯ с МЕДИА ★★★
+        try:
+            df_assignments = pd.read_excel(excel_file, sheet_name='Задания')
+            print(f"📝 Найдено заданий: {len(df_assignments)}")
+            
+            assignments_loaded = 0
+            for _, row in df_assignments.iterrows():
+                try:
+                    # ★ ОБНОВЛЕННОЕ: Теперь с медиа-полями ★
+                    # Получаем медиа данные (могут быть пустыми)
+                    content_photos = None
+                    content_audios = None
+                    video_url = None
+                    
+                    # Обрабатываем фото (JSON массив или строка)
+                    if 'фото' in row and pd.notna(row['фото']) and row['фото']:
+                        photos_str = str(row['фото']).strip()
+                        if photos_str and photos_str != 'nan':
+                            try:
+                                # Пробуем разобрать как JSON
+                                photos_data = json.loads(photos_str)
+                                content_photos = json.dumps(photos_data)
+                            except:
+                                # Если не JSON, создаем массив из строки
+                                content_photos = json.dumps([photos_str])
+                    
+                    # Обрабатываем аудио (JSON массив или строка)
+                    if 'аудио' in row and pd.notna(row['аудио']) and row['аудио']:
+                        audios_str = str(row['аудио']).strip()
+                        if audios_str and audios_str != 'nan':
+                            try:
+                                audios_data = json.loads(audios_str)
+                                content_audios = json.dumps(audios_data)
+                            except:
+                                content_audios = json.dumps([audios_str])
+                    
+                    # Обрабатываем видео ссылку
+                    if 'видео_ссылка' in row and pd.notna(row['видео_ссылка']) and row['видео_ссылка']:
+                        video_str = str(row['видео_ссылка']).strip()
+                        if video_str and video_str != 'nan':
+                            video_url = video_str
+                    
+                    cursor.execute('''
+                        INSERT INTO assignments 
+                        (assignment_id, day_id, title, content_text, доступно_до, тип,
+                         content_photos, content_audios, video_url)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        row['id'],
+                        row['id_дня'],
+                        row['название'],
+                        row['текст_задания'],
+                        row['доступно_до'],
+                        row['тип'],
+                        content_photos,  # ★ НОВОЕ
+                        content_audios,  # ★ НОВОЕ
+                        video_url        # ★ НОВОЕ
+                    ))
+                    assignments_loaded += 1
+                    
+                except Exception as e:
+                    print(f"⚠️ Ошибка загрузки задания {row['id']}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            print(f"✅ Загружено {assignments_loaded} заданий (с медиа-контентом)")
+            
+        except Exception as e:
+            print(f"❌ Ошибка загрузки заданий: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        conn.commit()
+        conn.close()
+        
+        print("🎉 Загрузка из Excel завершена! (включая медиа-контент)")
+        
+    except Exception as e:
+        print(f"❌ Критическая ошибка загрузки из Excel: {e}")
+        import traceback
+        traceback.print_exc()
+
+def reload_courses_data():
+    """Перезагружает данные курсов из Excel - ОБНОВЛЕННАЯ ВЕРСИЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Читаем Excel файл
+        df_arcs = pd.read_excel('courses_data.xlsx', sheet_name='Дуги')
+        
+        # ★★★ ОБНОВЛЯЕМ ТАБЛИЦУ ARCS С ВСЕМИ КОЛОНКАМИ ★★★
+        cursor.execute('DROP TABLE IF EXISTS arcs')
+        cursor.execute('''
+            CREATE TABLE arcs (
+                arc_id INTEGER PRIMARY KEY,
+                course_id INTEGER,
+                title TEXT,
+                order_num INTEGER,
+                price INTEGER,
+                дата_начала DATE,
+                дата_окончания DATE,
+                бесплатный_период INTEGER,
+                status TEXT,
+                is_available BOOLEAN DEFAULT 1
+            )
+        ''')
+        
+        # Загружаем данные с ВСЕМИ колонками
+        for _, row in df_arcs.iterrows():
+            cursor.execute('''
+                INSERT INTO arcs 
+                (arc_id, course_id, title, order_num, price, 
+                 дата_начала, дата_окончания, бесплатный_период, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                row['id'], row['id_курса'], row['название'],
+                row['порядок'], row['цена'],
+                row['дата_начала'], row['дата_окончания'],
+                row['бесплатный_период'], row['статус']
+            ))
+        
+        conn.commit()
+        print(f"✅ Загружено {len(df_arcs)} дуг с датами")
+        
+    except Exception as e:
+        print(f"❌ Ошибка загрузки дуг: {e}")
+    
+    finally:
+        conn.close()
+
+def check_database_structure():
+    """Проверяет текущую структуру базы данных"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    print("🧪 ПРОВЕРКА СТРУКТУРЫ БАЗЫ ДАННЫХ:")
+    
+    # Проверяем таблицы
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = cursor.fetchall()
+    print(f"📊 Таблицы в базе: {[table[0] for table in tables]}")
+    
+    # Проверяем данные в таблицах
+    for table in ['courses', 'arcs', 'days', 'assignments']:
+        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+        count = cursor.fetchone()[0]
+        print(f"📋 {table}: {count} записей")
+
+        if count > 0:
+            cursor.execute(f"SELECT * FROM {table} LIMIT 3")
+            sample = cursor.fetchall()
+            print(f"   Пример: {sample}")
+
+    # Проверим поля user_progress_advanced
+    cursor.execute("PRAGMA table_info(user_progress_advanced)")
+    columns = cursor.fetchall()
+    print(f"📋 Поля user_progress_advanced: {[col[1] for col in columns]}")
+    
+    conn.close()
+
+def get_user_courses(user_id):
+    """Получает курсы доступные пользователю"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT DISTINCT c.course_id, c.title 
+        FROM courses c
+        LEFT JOIN user_arc_access uaa ON c.course_id = uaa.arc_id AND uaa.user_id = ?
+        WHERE c.course_id = 1 OR uaa.user_id IS NOT NULL
+    ''', (user_id,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+
+def get_course_arcs(course_title):
+    """Получает дуги курса (заглушка)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT arc_id, title, is_available
+        FROM arcs 
+        WHERE course_id = 1
+        ORDER BY order_num
+    ''')
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+def grant_arc_access(user_id, arc_id, access_type='paid'):
+    """Выдает доступ - работает и со старым arc_id и с новым company_arc_id"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Определяем что это: arc_id или company_arc_id?
+        # Если arc_id < 1000 - это старая система, иначе - company_arc_id
+        if arc_id < 1000:  # Старый arc_id
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_arc_access 
+                (user_id, arc_id, company_arc_id, access_type)
+                VALUES (?, ?, NULL, ?)
+            ''', (user_id, arc_id, access_type))
+        else:  # Новый company_arc_id
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_arc_access 
+                (user_id, arc_id, company_arc_id, access_type)
+                VALUES (?, NULL, ?, ?)
+            ''', (user_id, arc_id, access_type))
+        
+        conn.commit()
+        print(f"✅ Доступ добавлен: user {user_id} -> ID {arc_id} (тип: {'arc' if arc_id < 1000 else 'company_arc'})")
+        return True
+    
+    except Exception as e:
+        print(f"🚨 Ошибка при добавлении доступа: {e}")
+        return False
+    finally:
+        conn.close()
+
+def is_day_available(user_id, arc_id, day_order):
+    """Проверяет, доступен ли день для пользователя"""
+    # ★★★ ВРЕМЕННАЯ ЗАГЛУШКА - ВСЕ ДНИ ДОСТУПНЫ ★★★
+    # Позже реализуем логику открытия дней по расписанию
+    return True
+
+def check_assignments_structure():
+    """Проверяет структуру заданий и их связь с днями"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    print("🧪 ПРОВЕРКА СВЯЗИ ЗАДАНИЙ И ДНЕЙ:")
+    
+    # Проверяем, есть ли у заданий day_id
+    cursor.execute("PRAGMA table_info(assignments)")
+    columns = cursor.fetchall()
+    print(f"📋 Поля таблицы assignments:")
+    for col in columns:
+        print(f"  - {col[1]} ({col[2]})")
+    
+    # Проверяем несколько заданий
+    cursor.execute('''
+        SELECT a.assignment_id, a.title, a.day_id, d.title as day_title, ar.title as arc_title
+        FROM assignments a
+        LEFT JOIN days d ON a.day_id = d.day_id
+        LEFT JOIN arcs ar ON d.arc_id = ar.arc_id
+        WHERE a.assignment_id <= 10
+        ORDER BY a.assignment_id
+    ''')
+    
+    assignments = cursor.fetchall()
+    print(f"\n📝 Первые 10 заданий:")
+    for assignment in assignments:
+        print(f"  - ID:{assignment[0]} '{assignment[1]}' -> День:{assignment[2]} '{assignment[3]}' -> Дуга:'{assignment[4]}'")
+    
+    conn.close()
+
+def get_day_id_by_title(day_title, arc_id):
+    """Находит ID дня по его названию и ID дуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT day_id FROM days WHERE title = ? AND arc_id = ?', 
+                   (day_title, arc_id))
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else None
+
+def save_assignment_answer_with_day(user_id, assignment_id, day_id, answer_text, answer_files):
+    """Сохраняет ответ с указанием дня"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сохраняем файлы как JSON
+    files_json = json.dumps(answer_files) if answer_files else None
+    
+    # ★★★ ВАЖНО: Добавляем day_id в таблицу прогресса ★★★
+    try:
+        # Сначала добавляем колонку day_id если её нет
+        cursor.execute("PRAGMA table_info(user_progress_advanced)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'day_id' not in columns:
+            cursor.execute('ALTER TABLE user_progress_advanced ADD COLUMN day_id INTEGER')
+    except:
+        pass
+    
+    # Сохраняем с day_id
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_progress_advanced 
+        (user_id, assignment_id, day_id, answer_text, answer_files, status, viewed_by_student)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+    ''', (user_id, assignment_id, day_id, answer_text, files_json, 'submitted'))
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Ответ сохранен: user={user_id}, assignment={assignment_id}, day={day_id}")
+
+def get_day_id_by_title_and_arc(day_title, arc_id):
+    """Находит ID дня по названию и ID дуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT day_id FROM days 
+        WHERE title = ? AND arc_id = ?
+    ''', (day_title, arc_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else None
+
+def get_assignment_by_title_and_day(assignment_title, day_id):
+    """Находит задание по названию и ID дня"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT assignment_id FROM assignments 
+        WHERE title = ? AND day_id = ?
+    ''', (assignment_title, day_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else None
+
+def is_day_available_for_user(user_id, day_id):
+    """Проверяет доступен ли день для выполнения заданий"""
+    print(f"🚨 DEBUG is_day_available: user_id={user_id}, day_id={day_id}")
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем время дедлайна из заданий дня
+    cursor.execute('''
+        SELECT доступно_до 
+        FROM assignments 
+        WHERE day_id = ?
+        LIMIT 1
+    ''', (day_id,))
+    
+    deadline_result = cursor.fetchone()
+    
+    if not deadline_result or not deadline_result[0]:
+        # Если время не указано - используем 12:00 по умолчанию
+        deadline_hour = 12
+        deadline_minute = 0
+    else:
+        # Парсим время из формата "22:00"
+        try:
+            time_str = str(deadline_result[0])
+            if ':' in time_str:
+                deadline_hour, deadline_minute = map(int, time_str.split(':'))
+            else:
+                deadline_hour, deadline_minute = 23, 59
+        except:
+            deadline_hour, deadline_minute = 23, 59
+    
+    # Получаем местное время пользователя
+    user_time = get_user_local_time(user_id)
+    user_hour = user_time.hour
+    user_minute = user_time.minute
+    
+    # Проверяем не истекло ли время
+    if user_hour > deadline_hour or (user_hour == deadline_hour and user_minute >= deadline_minute):
+        # Время истекло
+        conn.close()
+        return False
+    
+    conn.close()
+    return True
+    print(f"🚨 DEBUG: user_time={user_time.strftime('%H:%M')}, deadline={deadline_hour}:{deadline_minute:02d}")
+    print(f"🚨 DEBUG: result={not (user_hour > deadline_hour or (user_hour == deadline_hour and user_minute >= deadline_minute))}")
+    
+    return not (user_hour > deadline_hour or (user_hour == deadline_hour and user_minute >= deadline_minute))
+
+def get_available_days_for_user(user_id, arc_id):
+    """Возвращает доступные дни для пользователя в дуге"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем дату начала доступа
+    cursor.execute('''
+        SELECT purchased_at FROM user_arc_access 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
+    
+    result = cursor.fetchone()
+    
+    if not result:
+        conn.close()
+        return []
+    
+    purchased_at = result[0]
+    purchase_date = datetime.fromisoformat(purchased_at).date()
+    user_time = get_user_local_time(user_id)
+    days_since_start = (user_time.date() - purchase_date).days + 1
+    
+    # Получаем дни дуги
+    cursor.execute('''
+        SELECT day_id, title, order_num 
+        FROM days 
+        WHERE arc_id = ? 
+        ORDER BY order_num
+    ''', (arc_id,))
+    
+    all_days = cursor.fetchall()
+    conn.close()
+    
+    # Фильтруем по доступности
+    available_days = []
+    for day_id, title, order_num in all_days:
+        if order_num <= days_since_start:
+            available_days.append((day_id, title, order_num))
+    
+    return available_days
+
+def mark_day_as_skipped(user_id, day_id):
+    """Отмечает день как пропущенный"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем arc_id для дня
+    cursor.execute('SELECT arc_id FROM days WHERE day_id = ?', (day_id,))
+    arc_result = cursor.fetchone()
+    
+    if arc_result:
+        arc_id = arc_result[0]
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_daily_stats 
+            (user_id, arc_id, day_id, date, is_skipped)
+            VALUES (?, ?, ?, DATE('now'), 1)
+        ''', (user_id, arc_id, day_id))
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ День {day_id} отмечен как пропущенный для user {user_id}")
+
+def check_and_open_missed_days(user_id):
+    """Открывает текущий день если он еще не открыт"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # 1. Получаем активные дуги и их даты начала
+    cursor.execute("PRAGMA table_info(arcs)")
+    columns = [col[1] for col in cursor.fetchall()]
+    start_col = next((col for col in ['дата_начала', 'date_start'] if col in columns), 'дата_начала')
+    
+    cursor.execute(f'''
+        SELECT uaa.arc_id, a.title, a.{start_col} as arc_start
+        FROM user_arc_access uaa
+        JOIN arcs a ON uaa.arc_id = a.arc_id
+        WHERE uaa.user_id = ? AND a.status = 'active'
+    ''', (user_id,))
+    
+    arcs = cursor.fetchall()
+    total_opened = 0
+    
+    for arc_id, arc_title, arc_start in arcs:
+        if not arc_start:
+            continue
+            
+        # 2. Конвертируем дату начала
+        if isinstance(arc_start, str):
+            arc_start_date = datetime.fromisoformat(arc_start).date()
+        else:
+            arc_start_date = arc_start
+        
+        user_time = get_user_local_time(user_id)
+        
+        # 3. Текущий день от начала дуги
+        if user_time.date() < arc_start_date:
+            continue  # Дуга еще не началась
+        
+        current_day = (user_time.date() - arc_start_date).days + 1
+        
+        if current_day <= 0:
+            continue
+        
+        # Находим день
+        cursor.execute('''
+            SELECT d.day_id, d.title 
+            FROM days d
+            WHERE d.arc_id = ? AND d.order_num = ?
+        ''', (arc_id, current_day))
+        
+        day_info = cursor.fetchone()
+        
+        if day_info:
+            day_id, day_title = day_info
+            
+            # Проверяем не открыт ли уже день
+            cursor.execute('''
+                SELECT 1 FROM user_daily_stats 
+                WHERE user_id = ? AND day_id = ?
+            ''', (user_id, day_id))
+            
+            already_opened = cursor.fetchone()
+            
+            if not already_opened:
+                cursor.execute('''
+                    INSERT INTO user_daily_stats 
+                    (user_id, arc_id, day_id, date, is_skipped)
+                    VALUES (?, ?, ?, DATE('now'), 0)
+                ''', (user_id, arc_id, day_id))
+                total_opened += 1
+                print(f"✅ Открыт текущий день: {day_title} (дуга: {arc_title})")
+    
+    conn.commit()
+    conn.close()
+    return total_opened
+
+def get_current_arc_day(user_id, company_arc_id):
+    """Возвращает текущий день арки компании для пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # 1. Получаем дату старта арки компании
+    cursor.execute('SELECT actual_start_date FROM company_arcs WHERE company_arc_id = ?', (company_arc_id,))
+    result = cursor.fetchone()
+    
+    if not result or not result[0]:
+        conn.close()
+        return {
+            'day_id': None,
+            'day_title': f"Ошибка: дата начала не указана",
+            'day_number': 0,
+            'total_days': 56,  # 8 недель
+            'company_arc_id': company_arc_id,
+            'actual_start_date': None
+        }
+    
+    actual_start_date_str = result[0]
+    
+    # Преобразуем строку в дату
+    try:
+        if isinstance(actual_start_date_str, str):
+            # Очищаем строку
+            actual_start_date_str = actual_start_date_str.strip()
+            if not actual_start_date_str:
+                conn.close()
+                return {
+                    'day_id': None,
+                    'day_title': f"Ошибка: пустая дата начала",
+                    'day_number': 0,
+                    'total_days': 56,
+                    'company_arc_id': company_arc_id,
+                    'actual_start_date': None
+                }
+            
+            # Парсим дату
+            if ' ' in actual_start_date_str:
+                actual_start_date = datetime.strptime(actual_start_date_str, '%Y-%m-%d %H:%M:%S').date()
+            else:
+                actual_start_date = datetime.strptime(actual_start_date_str, '%Y-%m-%d').date()
+        else:
+            # Уже datetime/date объект
+            actual_start_date = actual_start_date_str
+            if hasattr(actual_start_date, 'date'):
+                actual_start_date = actual_start_date.date()
+    except Exception as e:
+        print(f"🚨 Ошибка парсинга даты '{actual_start_date_str}': {e}")
+        conn.close()
+        return {
+            'day_id': None,
+            'day_title': f"Ошибка формата даты",
+            'day_number': 0,
+            'total_days': 56,
+            'company_arc_id': company_arc_id,
+            'actual_start_date': None
+        }
+    
+    # 2. Получаем местное время пользователя
+    user_time = get_user_local_time(user_id)
+    user_date = user_time.date()
+    
+    # 3. Вычисляем текущий день арки компании
+    if user_date < actual_start_date:
+        current_day = 0  # Тренинг еще не начался
+    else:
+        current_day = (user_date - actual_start_date).days + 1
+    
+    # Ограничиваем максимальным количеством дней (56 дней = 8 недель)
+    current_day = min(max(current_day, 0), 56)
+    
+    # 4. Находим соответствующий день в стандартном тренинге (arc_id = 1)
+    # Предполагаем что стандартный тренинг в arcs имеет ID = 1
+    cursor.execute('''
+        SELECT day_id, title FROM days 
+        WHERE arc_id = 1 AND order_num = ?
+    ''', (current_day,))
+    
+    day_info = cursor.fetchone()
+    conn.close()
+    
+    if day_info:
+        day_id, day_title = day_info
+        return {
+            'day_id': day_id,
+            'day_title': day_title,
+            'day_number': current_day,
+            'total_days': 56,
+            'company_arc_id': company_arc_id,
+            'actual_start_date': actual_start_date
+        }
+    
+    # Если дня нет в базе
+    return {
+        'day_id': None,
+        'day_title': f"День {current_day}",
+        'day_number': current_day,
+        'total_days': 56,
+        'company_arc_id': company_arc_id,
+        'actual_start_date': actual_start_date
+    }
+
+
+def get_current_arc():
+    """Всегда возвращает дугу 1 для тестирования (до 10 января 2026)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # ВРЕМЕННО: всегда дуга 1
+    cursor.execute('SELECT arc_id, title FROM arcs WHERE arc_id = 1')
+    result = cursor.fetchone()
+    
+    if result:
+        print(f"✅ get_current_arc() возвращает: {result}")
+        conn.close()
+        return result
+    else:
+        # Даже если в БД нет - возвращаем заглушку
+        conn.close()
+        print(f"⚠️ get_current_arc(): дуга 1 не найдена в БД, возвращаем заглушку")
+        return (1, 'Дуга 1')
+
+def reload_full_from_excel():
+    """ПОЛНАЯ перезагрузка всех данных из Excel (с учетом компаний, работа с user_arc_access)"""
+    print("🔄 ПОЛНАЯ ПЕРЕЗАГРУЗКА ИЗ EXCEL (С КОМПАНИЯМИ И user_arc_access)...")
+    
+    try:
+        excel_file = 'courses_data.xlsx'
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        # ★★★ СОХРАНИМ КОМПАНИИ И ДОСТУПЫ ★★★
+        print("📊 Сохраняем компании и доступы пользователей...")
+        
+        # 1. Сохраняем компании (временная таблица)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS companies_backup AS 
+            SELECT * FROM companies
+        ''')
+        
+        # 2. Сохраняем user_companies (привязки пользователей)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_companies_backup AS 
+            SELECT * FROM user_companies
+        ''')
+        
+        # 3. Сохраняем доступы к компаниям (user_arc_access с company_arc_id)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_arc_access_backup AS 
+            SELECT * FROM user_arc_access
+        ''')
+        
+        # 4. Сохраняем company_arcs (арки компаний)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS company_arcs_backup AS 
+            SELECT * FROM company_arcs
+        ''')
+        
+        # 5. Сохраняем пользователей
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users_backup AS 
+            SELECT * FROM users
+        ''')
+        
+        # 6. Сохраняем прогресс заданий
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_progress_advanced_backup AS 
+            SELECT * FROM user_progress_advanced
+        ''')
+        
+        conn.commit()
+        
+        print("🗂️ Создаем/проверяем таблицы...")
+        
+        # ★★★ ОБНОВЛЯЕМ ТАБЛИЦУ user_arc_access ★★★
+        # Проверяем структуру user_arc_access
+        cursor.execute("PRAGMA table_info(user_arc_access)")
+        columns = cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        # Если нет company_arc_id - добавляем
+        if 'company_arc_id' not in column_names:
+            print("🔧 Обновляем user_arc_access для поддержки компаний...")
+            
+            # Создаем временную таблицу с новой структурой
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_arc_access_new (
+                    user_id INTEGER NOT NULL,
+                    company_arc_id INTEGER NOT NULL,  -- ★ ИЗМЕНЕНИЕ: arc_id → company_arc_id ★
+                    access_type TEXT DEFAULT 'paid',
+                    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    PRIMARY KEY (user_id, company_arc_id)
+                )
+            ''')
+            
+            # Переносим данные из старой таблицы
+            try:
+                # Если есть старые данные (arc_id) - конвертируем их
+                if 'arc_id' in column_names:
+                    cursor.execute('''
+                        INSERT INTO user_arc_access_new (user_id, company_arc_id, access_type, purchased_at)
+                        SELECT user_id, arc_id, access_type, purchased_at 
+                        FROM user_arc_access
+                    ''')
+                    print("✅ Конвертированы старые доступы в новую структуру")
+            except:
+                print("⚠️ Нет старых данных для конвертации")
+            
+            # Удаляем старую и переименовываем новую
+            cursor.execute("DROP TABLE IF EXISTS user_arc_access")
+            cursor.execute("ALTER TABLE user_arc_access_new RENAME TO user_arc_access")
+            print("✅ Таблица user_arc_access обновлена с company_arc_id")
+        else:
+            print("✅ Таблица user_arc_access уже обновлена")
+        
+        # ★★★ СОЗДАЕМ ТАБЛИЦЫ УВЕДОМЛЕНИЙ ★★★
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type INTEGER NOT NULL,
+                day_num INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                image_url TEXT,
+                is_active BOOLEAN DEFAULT 1,
+                UNIQUE(type, day_num)
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mass_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type INTEGER NOT NULL,
+                title TEXT,
+                text TEXT NOT NULL,
+                days_before INTEGER,
+                is_active BOOLEAN DEFAULT 1
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sent_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                notification_id INTEGER NOT NULL,
+                day_num INTEGER,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        ''')
+        
+        # ★★★ УДАЛЯЕМ СТАРЫЕ ДАННЫЕ КУРСОВ ★★★
+        print("🗑️ Удаляем старые данные курсов (кроме компаний)...")
+        
+        # Удаляем ТОЛЬКО таблицы курсов, но сохраняем компании
+        tables_to_clear = ['courses', 'arcs', 'days', 'assignments']
+        
+        for table in tables_to_clear:
+            try:
+                cursor.execute(f'DELETE FROM {table}')
+                print(f"   ✅ Очищена таблица: {table}")
+            except Exception as e:
+                print(f"   ⚠️ Не удалось очистить {table}: {e}")
+        
+        # ★★★ ЗАГРУЖАЕМ НОВЫЕ ДАННЫЕ ★★★
+        print("📥 Загружаем новые данные из Excel...")
+        
+        # 1. Курсы
+        try:
+            df_courses = pd.read_excel(excel_file, sheet_name='Курсы')
+            for _, row in df_courses.iterrows():
+                cursor.execute('''
+                    INSERT INTO courses (course_id, title, description)
+                    VALUES (?, ?, ?)
+                ''', (row['id'], row['название'], row['описание']))
+            print(f"✅ Загружено курсов: {len(df_courses)}")
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки курсов: {e}")
+        
+        # 2. Арки (стандартные шаблоны)
+        try:
+            df_arcs = pd.read_excel(excel_file, sheet_name='Дуги')
+            for _, row in df_arcs.iterrows():
+                # Проверяем есть ли обязательные колонки
+                дата_начала = row.get('дата_начала', None)
+                дата_окончания = row.get('дата_окончания', None)
+                бесплатный_период = row.get('бесплатный_период', 7)
+                статус = row.get('статус', 'active')
+                
+                cursor.execute('''
+                    INSERT INTO arcs 
+                    (arc_id, course_id, title, order_num, price, 
+                     дата_начала, дата_окончания, бесплатный_период, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    row['id'], 
+                    row.get('id_курса', 1), 
+                    row['название'],
+                    row.get('порядок', 0),
+                    row.get('цена', 0),
+                    дата_начала,
+                    дата_окончания,
+                    бесплатный_период,
+                    статус
+                ))
+            print(f"✅ Загружено арок (шаблонов): {len(df_arcs)}")
+            
+            # Проверяем что стандартный тренинг загружен (arc_id = 1)
+            cursor.execute("SELECT title FROM arcs WHERE arc_id = 1")
+            standard_arc = cursor.fetchone()
+            if standard_arc:
+                print(f"✅ Стандартный тренинг (arc_id=1): '{standard_arc[0]}'")
+            else:
+                print("⚠️ Стандартный тренинг (arc_id=1) не загружен!")
+                
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки арок: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 3. Дни
+        try:
+            df_days = pd.read_excel(excel_file, sheet_name='Дни')
+            days_count = 0
+            for _, row in df_days.iterrows():
+                try:
+                    cursor.execute('''
+                        INSERT INTO days (day_id, arc_id, title, order_num)
+                        VALUES (?, ?, ?, ?)
+                    ''', (
+                        row['id'], 
+                        row.get('id_дуги', 1),  # По умолчанию к стандартному тренингу
+                        row['название'], 
+                        row.get('порядок', 0)
+                    ))
+                    days_count += 1
+                except Exception as e:
+                    print(f"⚠️ Ошибка дня {row.get('id', '?')}: {e}")
+            
+            print(f"✅ Загружено дней: {days_count}")
+            
+            # Проверяем что есть 56 дней для стандартного тренинга
+            cursor.execute("SELECT COUNT(*) FROM days WHERE arc_id = 1")
+            days_for_arc1 = cursor.fetchone()[0]
+            print(f"📊 Дней в стандартном тренинге (arc_id=1): {days_for_arc1}")
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки дней: {e}")
+        
+        # 4. Задания
+        try:
+            df_assignments = pd.read_excel(excel_file, sheet_name='Задания')
+            
+            # ★★★ ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ КОЛОНКИ ЕСЛИ НЕТ ★★★
+            for col_name, col_type in [('доступно_до', 'TEXT'), ('тип', 'TEXT')]:
+                try:
+                    cursor.execute(f'ALTER TABLE assignments ADD COLUMN {col_name} {col_type}')
+                    print(f"✅ Добавлена колонка: {col_name}")
+                except sqlite3.OperationalError:
+                    pass  # Уже существует
+            
+            assignments_count = 0
+            print(f"🔍 Загружаем {len(df_assignments)} заданий")
+            
+            for _, row in df_assignments.iterrows():
+                try:
+                    available_until = row.get('доступно_до', '23:59:00')
+                    if isinstance(available_until, time):
+                        available_until = available_until.strftime('%H:%M')
+                    elif isinstance(available_until, str) and available_until.count(':') == 2:
+                        available_until = available_until.rsplit(':', 1)[0]
+                    
+                    # Проверяем что день существует
+                    day_id = row.get('id_дня')
+                    if not day_id:
+                        print(f"⚠️ Пропускаем задание: нет id_дня")
+                        continue
+                    
+                    cursor.execute('''
+                        INSERT INTO assignments 
+                        (assignment_id, day_id, title, content_text, доступно_до, тип)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        row['id'], 
+                        day_id, 
+                        row['название'],
+                        row.get('текст_задания', ''),
+                        available_until,
+                        row.get('тип', 'text')
+                    ))
+                    assignments_count += 1
+                    
+                except Exception as e:
+                    print(f"⚠️ Ошибка задания {row.get('id', '?')}: {e}")
+            
+            print(f"✅ Загружено заданий: {assignments_count}")
+            
+            # Проверяем задания для стандартного тренинга
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM assignments a
+                JOIN days d ON a.day_id = d.day_id
+                WHERE d.arc_id = 1
+            ''')
+            assignments_for_arc1 = cursor.fetchone()[0]
+            print(f"📊 Заданий в стандартном тренинге: {assignments_for_arc1}")
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки заданий: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # ★★★ ЗАГРУЖАЕМ УВЕДОМЛЕНИЯ ★★★
+        print("📨 Загружаем уведомления...")
+        
+        try:
+            # Уведомления для дней
+            df_notifications = pd.read_excel(excel_file, sheet_name='Уведомления')
+            cursor.execute('DELETE FROM notifications')
+            for _, row in df_notifications.iterrows():
+                cursor.execute('''
+                    INSERT INTO notifications (type, day_num, text, image_url, is_active)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    int(row['type']),
+                    int(row['day_num']),
+                    str(row['text']),
+                    str(row['image_url']) if pd.notna(row.get('image_url')) else None,
+                    int(row['is_active']) if pd.notna(row.get('is_active')) else 1
+                ))
+            print(f"✅ Загружено уведомлений: {len(df_notifications)}")
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки уведомлений: {e}")
+        
+        try:
+            # Массовые уведомления
+            df_mass = pd.read_excel(excel_file, sheet_name='Массовые уведомления')
+            cursor.execute('DELETE FROM mass_notifications')
+            for _, row in df_mass.iterrows():
+                cursor.execute('''
+                    INSERT INTO mass_notifications (type, title, text, days_before, is_active)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    int(row['type']),
+                    str(row['title']) if pd.notna(row.get('title')) else None,
+                    str(row['text']),
+                    int(row['days_before']) if pd.notna(row.get('days_before')) else None,
+                    int(row['is_active']) if pd.notna(row.get('is_active')) else 1
+                ))
+            print(f"✅ Загружено массовых уведомлений: {len(df_mass)}") 
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки массовых уведомлений: {e}")
+        
+        # ★★★ ВОССТАНАВЛИВАЕМ КОМПАНИИ И ПОЛЬЗОВАТЕЛЕЙ ★★★
+        print("👥 Восстанавливаем компании и пользователей...")
+        
+        try:
+            # Восстанавливаем компании
+            cursor.execute('''
+                INSERT OR IGNORE INTO companies 
+                SELECT * FROM companies_backup
+            ''')
+            print(f"✅ Восстановлены компании")
+            
+            # Восстанавливаем пользователей
+            cursor.execute('''
+                INSERT OR IGNORE INTO users 
+                SELECT * FROM users_backup
+            ''')
+            print(f"✅ Восстановлены пользователи")
+            
+            # Восстанавливаем привязки пользователей к компаниям
+            cursor.execute('''
+                INSERT OR IGNORE INTO user_companies 
+                SELECT * FROM user_companies_backup
+            ''')
+            print(f"✅ Восстановлены привязки пользователей к компаниям")
+            
+            # Восстанавливаем арки компаний
+            cursor.execute('''
+                INSERT OR IGNORE INTO company_arcs 
+                SELECT * FROM company_arcs_backup
+            ''')
+            print(f"✅ Восстановлены арки компаний")
+            
+            # ★★★ ВОССТАНАВЛИВАЕМ ДОСТУПЫ В user_arc_access ★★★
+            
+            # Восстанавливаем прогресс (только для существующих заданий)
+            cursor.execute('''
+                INSERT OR IGNORE INTO user_progress_advanced 
+                SELECT upb.* 
+                FROM user_progress_advanced_backup upb
+                JOIN assignments a ON upb.assignment_id = a.assignment_id
+            ''')
+            print(f"✅ Восстановлен прогресс заданий")
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка восстановления данных: {e}")
+        
+        # ★★★ ОЧИСТКА ВРЕМЕННЫХ ТАБЛИЦ ★★★
+        print("🧹 Очистка временных таблиц...")
+        cursor.execute('DROP TABLE IF EXISTS companies_backup')
+        cursor.execute('DROP TABLE IF EXISTS user_companies_backup')
+        cursor.execute('DROP TABLE IF EXISTS user_arc_access_backup')
+        cursor.execute('DROP TABLE IF EXISTS company_arcs_backup')
+        cursor.execute('DROP TABLE IF EXISTS users_backup')
+        cursor.execute('DROP TABLE IF EXISTS user_progress_advanced_backup')
+        
+        conn.commit()
+        conn.close()
+        
+        print("🎉 ПОЛНАЯ ПЕРЕЗАГРУЗКА ЗАВЕРШЕНА!")
+        
+        # ★★★ ВЫВОД СВОДКИ ★★★
+        print("\n📊 СВОДКА ПО ЗАГРУЗКЕ:")
+        print("=" * 50)
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        # Стандартный тренинг
+        cursor.execute("SELECT title FROM arcs WHERE arc_id = 1")
+        standard_arc = cursor.fetchone()
+        print(f"📚 Стандартный тренинг: {standard_arc[0] if standard_arc else 'НЕТ!'}")
+        
+        cursor.execute("SELECT COUNT(*) FROM days WHERE arc_id = 1")
+        days_count = cursor.fetchone()[0]
+        print(f"📅 Дней в тренинге: {days_count} ({'✅ 56' if days_count == 56 else '❌ не 56'})")
+        
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM assignments a
+            JOIN days d ON a.day_id = d.day_id
+            WHERE d.arc_id = 1
+        ''')
+        assignments_count = cursor.fetchone()[0]
+        print(f"📝 Заданий в тренинге: {assignments_count}")
+        
+        # Компании
+        cursor.execute("SELECT COUNT(*) FROM companies")
+        companies_count = cursor.fetchone()[0]
+        print(f"🏢 Компаний сохранено: {companies_count}")
+        
+        cursor.execute("SELECT COUNT(*) FROM company_arcs")
+        company_arcs_count = cursor.fetchone()[0]
+        print(f"🎯 Арок компаний: {company_arcs_count}")
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        users_count = cursor.fetchone()[0]
+        print(f"👥 Пользователей: {users_count}")
+        
+        # Доступы в user_arc_access
+        cursor.execute("SELECT COUNT(*) FROM user_arc_access")
+        user_arc_access_count = cursor.fetchone()[0]
+        print(f"🔑 Доступов в user_arc_access: {user_arc_access_count}")
+        
+        conn.close()
+        
+        print("=" * 50)
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА ПЕРЕЗАГРУЗКИ: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def get_user_skip_statistics(user_id, company_arc_id):
+    """Статистика пользователя в компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # 1. Получаем дату старта арки компании
+    cursor.execute('''
+        SELECT ca.actual_start_date, ca.actual_end_date, c.name as company_name
+        FROM company_arcs ca
+        JOIN companies c ON ca.company_id = c.company_id
+        WHERE ca.company_arc_id = ?
+    ''', (company_arc_id,))
+    
+    arc_result = cursor.fetchone()
+    
+    if not arc_result or not arc_result[0]:
+        conn.close()
+        return {'error': 'Арка компании не найдена'}
+    
+    actual_start_date_str, actual_end_date, company_name = arc_result
+    
+    # Преобразуем дату старта
+    try:
+        if isinstance(actual_start_date_str, str):
+            actual_start_date_str = actual_start_date_str.strip()
+            if ' ' in actual_start_date_str:
+                actual_start_date = datetime.strptime(actual_start_date_str, '%Y-%m-%d %H:%M:%S').date()
+            else:
+                actual_start_date = datetime.strptime(actual_start_date_str, '%Y-%m-%d').date()
+        else:
+            actual_start_date = actual_start_date_str
+            if hasattr(actual_start_date, 'date'):
+                actual_start_date = actual_start_date.date()
+    except Exception as e:
+        print(f"🚨 Ошибка парсинга даты в статистике: {e}")
+        conn.close()
+        return {'error': 'Ошибка формата даты'}
+    
+    # 2. Находим дату первого ответа в этой компании
+    cursor.execute('''
+        SELECT MIN(DATE(upa.submitted_at))
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
+        WHERE upa.user_id = ? AND d.arc_id = 1  -- Стандартный тренинг
+        AND upa.submitted_at IS NOT NULL
+    ''', (user_id,))
+    
+    first_answer_result = cursor.fetchone()
+    
+    if not first_answer_result or not first_answer_result[0]:
+        # Если нет ответов, берем дату получения доступа
+        cursor.execute('''
+            SELECT MIN(purchased_at) 
+            FROM user_company_access 
+            WHERE user_id = ? AND company_arc_id = ?
+        ''', (user_id, company_arc_id))
+        first_access_result = cursor.fetchone()
+        
+        if not first_access_result or not first_access_result[0]:
+            user_start_date = actual_start_date
+        else:
+            user_start_date = datetime.fromisoformat(first_access_result[0]).date()
+    else:
+        user_start_date = first_answer_result[0]
+        if isinstance(user_start_date, str):
+            user_start_date = datetime.fromisoformat(user_start_date).date()
+    
+    # 3. Сколько ВСЕГО заданий в стандартном тренинге (56 дней)
+    cursor.execute('SELECT COUNT(*) FROM assignments a JOIN days d ON a.day_id = d.day_id WHERE d.arc_id = 1')
+    total_assignments = cursor.fetchone()[0]
+    
+    # 4. Выполненные задания (approved) в этой компании
+    cursor.execute('''
+        SELECT a.assignment_id, a.title, d.title as day_title, d.order_num
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
+        WHERE upa.user_id = ? AND d.arc_id = 1 
+        AND upa.status = 'approved'
+    ''', (user_id,))
+    
+    completed_assignments_data = cursor.fetchall()
+    completed_assignments = len(completed_assignments_data)
+    completed_ids = {row[0] for row in completed_assignments_data}
+    completed_days = {row[3] for row in completed_assignments_data}
+    
+    # 5. Задания на проверке (submitted)
+    cursor.execute('''
+        SELECT COUNT(*) 
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
+        WHERE upa.user_id = ? AND d.arc_id = 1 
+        AND upa.status = 'submitted'
+    ''', (user_id,))
+    
+    submitted_assignments = cursor.fetchone()[0]
+    
+    # 6. ВСЕ задания стандартного тренинга
+    cursor.execute('''
+        SELECT a.assignment_id, a.title, d.title as day_title, d.order_num
+        FROM assignments a
+        JOIN days d ON a.day_id = d.day_id
+        WHERE d.arc_id = 1
+        ORDER BY d.order_num, a.assignment_id
+    ''',)
+    
+    all_assignments = cursor.fetchall()
+    
+    # 7. Определяем пропущенные задания
+    skipped_list = []
+    today = datetime.now().date()
+    
+    for assignment_id, assignment_title, day_title, day_order in all_assignments:
+        # Задание доступно с дня user_start_date + (day_order - 1)
+        assignment_due_date = user_start_date + timedelta(days=(day_order - 1))
+        
+        # Пропущенным считаем если дедлайн прошел и задание не выполнено
+        if today > assignment_due_date and assignment_id not in completed_ids:
+            # Проверяем не на проверке ли
+            cursor.execute('''
+                SELECT 1 FROM user_progress_advanced 
+                WHERE assignment_id = ? AND user_id = ? AND status = 'submitted'
+            ''', (assignment_id, user_id))
+            is_submitted = cursor.fetchone()
+            
+            if not is_submitted:
+                skipped_list.append({
+                    'day': day_title,
+                    'assignment': assignment_title,
+                    'day_number': day_order,
+                    'due_date': assignment_due_date
+                })
+    
+    skipped_assignments = len(skipped_list)
+    
+    # 8. Процент выполнения
+    completion_rate = 0
+    if total_assignments > 0:
+        completion_rate = round((completed_assignments / total_assignments) * 100)
+    
+    # 9. СЕРИЯ БЕЗ ПРОПУСКОВ
+    max_streak = 0
+    current_streak = 0
+    last_day = -1
+    
+    for day_order in sorted(completed_days):
+        if day_order == last_day + 1:
+            current_streak += 1
+        else:
+            current_streak = 1
+        
+        max_streak = max(max_streak, current_streak)
+        last_day = day_order
+    
+    # 10. Текущий день арки компании
+    current_day_info = get_current_arc_day(user_id, company_arc_id)
+    current_day = current_day_info['day_number'] if current_day_info else 0
+    
+    conn.close()
+    
+    return {
+        'company_name': company_name,
+        'total_assignments': total_assignments,
+        'completed_assignments': completed_assignments,
+        'submitted_assignments': submitted_assignments,
+        'skipped_assignments': skipped_assignments,
+        'completion_rate': completion_rate,
+        'remaining_assignments': total_assignments - completed_assignments - submitted_assignments - skipped_assignments,
+        'skipped_list': skipped_list[:10],
+        'start_date': user_start_date,
+        'streak_days': max_streak,
+        'current_day': current_day,
+        'company_arc_id': company_arc_id,
+        'actual_start_date': actual_start_date
+    }
+
+def check_and_notify_skipped_days(user_id, arc_id):
+    """Проверяет пропуски и возвращает сообщение для пользователя"""
+    stats = get_user_skip_statistics(user_id, arc_id)
+    
+    if stats['skipped_days'] == 0:
+        return None
+    
+    messages = []
+    
+    if stats['skipped_days'] == 1:
+        messages.append(f"⚠️ У вас 1 пропущенный день.")
+    elif stats['skipped_days'] <= 3:
+        messages.append(f"⚠️ У вас {stats['skipped_days']} пропущенных дня.")
+    else:
+        messages.append(f"🚨 У вас {stats['skipped_days']} пропущенных дней!")
+    
+    messages.append(f"✅ Выполнено дней: {stats['completed_days']}/{stats['total_days']}")
+    messages.append(f"📊 Процент выполнения: {stats['completion_rate']}%")
+    
+    # Для первой дуги - только информирование
+    if arc_id == 1 and stats['skipped_days'] >= 3:
+        messages.append("\n💡 *На первой дуге блокировки нет, но старайтесь не пропускать!*")
+    
+    return "\n".join(messages)
+
+
+def get_user_offer_status(user_id):
+    """Возвращает статус принятия оферты пользователем - ФИКС БАГА С 'None'"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT accepted_offer, phone, fio 
+        FROM users 
+        WHERE user_id = ?
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        accepted_offer, phone, fio = result
+        
+        # ДЕБАГ
+        print(f"🔍 get_user_offer_status RAW: accepted={accepted_offer}, "
+              f"phone={repr(phone)} (тип: {type(phone)}), "
+              f"fio={repr(fio)} (тип: {type(fio)})")
+        
+        # БАГ: phone может быть строкой 'None' вместо None
+        # Исправляем:
+        if phone is not None:
+            phone_str = str(phone).strip()
+            if phone_str.lower() in ['none', 'null', '']:
+                phone_str = ""
+                phone = None
+            else:
+                phone = phone_str
+        else:
+            phone_str = ""
+        
+        # Аналогично для ФИО
+        if fio is not None:
+            fio_str = str(fio).strip()
+            if fio_str.lower() in ['none', 'null', '']:
+                fio_str = ""
+                fio = None
+            else:
+                fio = fio_str
+        else:
+            fio_str = ""
+        
+        # Проверки
+        has_phone = bool(phone and len(str(phone)) >= 10)
+        has_fio = bool(fio and len(str(fio)) >= 3 and len(str(fio).split()) >= 1)  # Минимум 1 слово
+        
+        print(f"🔍 Проверка: has_phone={has_phone} (phone='{phone}'), "
+              f"has_fio={has_fio} (fio='{fio}')")
+        
+        return {
+            'accepted_offer': bool(accepted_offer) if accepted_offer is not None else False,
+            'phone': phone if has_phone else None,
+            'has_fio': has_fio,
+            'has_phone': has_phone,
+            'fio_raw': fio_str
+        }
+    
+    return {'accepted_offer': False, 'phone': None, 'has_fio': False, 'has_phone': False, 'fio_raw': ''}
+
+def accept_offer(user_id, phone=None, fio=None):
+    """Сохраняет принятие оферты пользователем - ИСПРАВЛЕННАЯ (не перезаписывает)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    print(f"⚡ accept_offer: user={user_id}, phone={phone}, fio={fio}")
+    
+    # 1. Сначала получаем текущие значения
+    cursor.execute('SELECT phone, fio FROM users WHERE user_id = ?', (user_id,))
+    current = cursor.fetchone()
+    current_phone, current_fio = current if current else (None, None)
+    
+    print(f"🔍 Текущие в БД: phone={current_phone}, fio={current_fio}")
+    
+    # 2. Готовим обновление
+    updates = ["accepted_offer = 1", "accepted_offer_date = CURRENT_TIMESTAMP"]
+    params = []
+    
+    # 3. Телефон: обновляем только если передан и не None
+    if phone is not None:
+        phone_str = str(phone).strip()
+        if phone_str and phone_str.lower() not in ['none', 'null', '']:
+            updates.append("phone = ?")
+            params.append(phone_str)
+            print(f"📱 Обновляем телефон: {phone_str}")
+        else:
+            print(f"⚠️ phone пустое, оставляем текущий: {current_phone}")
+    else:
+        print(f"📱 phone=None, оставляем текущий: {current_phone}")
+    
+    # 4. ФИО: обновляем только если передан и не None
+    if fio is not None:
+        fio_str = str(fio).strip()
+        if fio_str and fio_str.lower() not in ['none', 'null', '']:
+            updates.append("fio = ?")
+            params.append(fio_str)
+            print(f"👤 Обновляем ФИО: {fio_str}")
+        else:
+            print(f"⚠️ fio пустое, оставляем текущий: {current_fio}")
+    else:
+        print(f"👤 fio=None, оставляем текущий: {current_fio}")
+    
+    # 5. Добавляем user_id в параметры
+    params.append(user_id)
+    
+    # 6. Выполняем обновление
+    sql = f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?"
+    print(f"🔧 SQL: {sql}")
+    print(f"🔧 Params: {params}")
+    
+    cursor.execute(sql, params)
+    conn.commit()
+    
+    # 7. Проверяем результат
+    cursor.execute('SELECT accepted_offer, phone, fio FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    
+    if result:
+        accepted, saved_phone, saved_fio = result
+        print(f"✅ Результат в БД: accepted={accepted}, phone={saved_phone}, fio={saved_fio}")
+
+    cursor.execute('SELECT accepted_offer, phone, fio FROM users WHERE user_id = ?', (user_id,))
+    after_update = cursor.fetchone()
+    print(f"🔍 После UPDATE в БД: accepted={after_update[0]}, phone={repr(after_update[1])}, fio={repr(after_update[2])}")
+    
+    conn.close()
+    return True
+
+def get_offer_text():
+    """Читает текст оферты из файла"""
+    try:
+        with open('offer.txt', 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+        return "Текст оферты не найден. Свяжитесь с администратором."
+
+def get_service_offer_text():
+    """Читает текст оферты на услуги из файла"""
+    try:
+        with open('offer_service.txt', 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+        return "Текст оферты на услуги не найден. Свяжитесь с администратором."
+
+def get_user_service_offer_status(user_id):
+    """Возвращает статус принятия оферты на услуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT accepted_service_offer 
+        FROM users 
+        WHERE user_id = ?
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return bool(result[0]) if result and result[0] is not None else False
+
+def accept_service_offer(user_id):
+    """Сохраняет принятие оферты на услуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE users 
+        SET accepted_service_offer = 1, 
+            accepted_service_offer_date = CURRENT_TIMESTAMP
+        WHERE user_id = ?
+    ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Оферта услуг принята пользователем {user_id}")
+
+def load_notifications_from_excel():
+    """Загружает уведомления из Excel в БД"""
+    try:
+        excel_path = 'courses_data.xlsx'
+        
+        # Уведомления для дней
+        df_notifications = pd.read_excel(excel_path, sheet_name='Уведомления')
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        # Очищаем таблицу
+        cursor.execute('DELETE FROM notifications')
+        
+        # Загружаем данные
+        for _, row in df_notifications.iterrows():
+            cursor.execute('''
+                INSERT INTO notifications (type, day_num, text, image_url, is_active)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                int(row['type']),
+                int(row['day_num']),
+                str(row['text']),
+                str(row['image_url']) if pd.notna(row.get('image_url')) else None,
+                int(row['is_active']) if pd.notna(row.get('is_active')) else 1
+            ))
+        
+        # Массовые уведомления
+        df_mass = pd.read_excel(excel_path, sheet_name='Массовые уведомления')
+        
+        cursor.execute('DELETE FROM mass_notifications')
+        
+        for _, row in df_mass.iterrows():
+            cursor.execute('''
+                INSERT INTO mass_notifications (type, title, text, days_before, is_active)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                int(row['type']),
+                str(row['title']) if pd.notna(row.get('title')) else None,
+                str(row['text']),
+                int(row['days_before']) if pd.notna(row.get('days_before')) else None,
+                int(row['is_active']) if pd.notna(row.get('is_active')) else 1
+            ))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Загружено {len(df_notifications)} уведомлений и {len(df_mass)} массовых уведомлений")
+        return True
+        
+    except Exception as e:
+        print(f"🚨 Ошибка загрузки уведомлений: {e}")
+        return False
+
+def get_notification(notification_type, day_num=None):
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        if day_num is not None:
+            cursor.execute('''
+                SELECT id, text, image_url 
+                FROM notifications 
+                WHERE type = ? AND (day_num = ? OR day_num = 0) AND is_active = 1
+                ORDER BY day_num DESC
+                LIMIT 1
+            ''', (notification_type, day_num))
+        else:
+            cursor.execute('''
+                SELECT id, text, image_url 
+                FROM notifications 
+                WHERE type = ? AND is_active = 1
+                LIMIT 1
+            ''', (notification_type,))
+        
+        result = cursor.fetchone()
+        
+        if result:
+            # Очищаем текст
+            text = result[1]
+            if text:
+                # Убираем проблемные символы, сохраняя смайлики
+                try:
+                    text = text.encode('utf-8', 'ignore').decode('utf-8')
+                except:
+                    text = str(text)
+            
+            return {
+                'id': result[0],
+                'text': text,
+                'image_url': result[2]
+            }
+        return None
+        
+    except Exception as e:
+        print(f"🚨 Ошибка получения уведомления: {e}")
+        return None
+    finally:
+        conn.close()
+
+def get_mass_notification(notification_type, days_before=None):
+    """Получает массовое уведомление"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    if days_before is not None:
+        cursor.execute('''
+            SELECT id, title, text 
+            FROM mass_notifications 
+            WHERE type = ? AND days_before = ? AND is_active = 1
+        ''', (notification_type, days_before))
+    else:
+        cursor.execute('''
+            SELECT id, title, text 
+            FROM mass_notifications 
+            WHERE type = ? AND is_active = 1
+        ''', (notification_type,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'id': result[0],
+            'title': result[1],
+            'text': result[2]
+        }
+    return None
+
+def check_notification_sent(user_id, notification_id, day_num=None):
+    """Проверяет, отправлялось ли уже это уведомление пользователю"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    if day_num is not None:
+        cursor.execute('''
+            SELECT 1 FROM sent_notifications 
+            WHERE user_id = ? AND notification_id = ? AND day_num = ?
+        ''', (user_id, notification_id, day_num))
+    else:
+        cursor.execute('''
+            SELECT 1 FROM sent_notifications 
+            WHERE user_id = ? AND notification_id = ?
+        ''', (user_id, notification_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result is not None
+
+def mark_notification_sent(user_id, notification_id, day_num=None):
+    """Отмечает уведомление как отправленное"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO sent_notifications (user_id, notification_id, day_num)
+        VALUES (?, ?, ?)
+    ''', (user_id, notification_id, day_num))
+    
+    conn.commit()
+    conn.close()
+
+def save_payment(user_id, company_arc_id, amount, yookassa_id, status='pending'):
+    """Сохраняет платеж за доступ к тренингу компании"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Проверяем существует ли таблица с правильной структурой
+        cursor.execute("PRAGMA table_info(payments)")
+        columns = cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        # Если таблица имеет старую структуру - создаем новую
+        if 'company_arc_id' not in column_names:
+            logger.warning("Таблица payments имеет старую структуру, пересоздаем...")
+            cursor.execute("DROP TABLE IF EXISTS payments")
+            cursor.execute('''
+                CREATE TABLE payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    company_arc_id INTEGER NOT NULL,  # ★ ИЗМЕНИЛИ: arc_id → company_arc_id ★
+                    amount REAL NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    yookassa_payment_id TEXT UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    metadata TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
+                )
+            ''')
+            conn.commit()
+            logger.info("✅ Таблица payments пересоздана с поддержкой компаний")
+        
+        # Сохраняем платеж
+        cursor.execute('''
+            INSERT INTO payments (user_id, company_arc_id, amount, status, yookassa_payment_id)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, company_arc_id, amount, status, yookassa_id))
+        
+        conn.commit()
+        payment_id = cursor.lastrowid
+        
+        logger.info(f"✅ Платеж сохранен: ID {payment_id}, user={user_id}, company_arc={company_arc_id}, amount={amount}₽, yookassa={yookassa_id}")
+        return payment_id
+        
+    except Exception as e:
+        logger.error(f"🚨 Ошибка сохранения платежа: {e}", exc_info=True)
+        return None
+    finally:
+        conn.close()
+
+def update_payment_status(yookassa_id, status):
+    """Обновляет статус платежа для компании"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        conn = sqlite3.connect('mentor_bot.db', timeout=10)
+        cursor = conn.cursor()
+        
+        completed_at = datetime.now().isoformat() if status == 'succeeded' else None
+        
+        cursor.execute('''
+            UPDATE payments 
+            SET status = ?, completed_at = ?
+            WHERE yookassa_payment_id = ?
+        ''', (status, completed_at, yookassa_id))
+        
+        conn.commit()
+        logger.info(f"Статус платежа компании {yookassa_id} обновлен на '{status}'")
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления статуса: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def check_if_can_buy_arc(user_id, arc_id):
+    """Проверяет можно ли купить дугу (до 10 дня)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Получаем дату начала дуги
+        cursor.execute('SELECT дата_начала FROM arcs WHERE arc_id = ?', (arc_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Дуга не найдена"
+        
+        arc_start_date = datetime.fromisoformat(result[0]).date()
+        today = datetime.now().date()
+        
+        # Вычисляем день дуги
+        day_of_arc = (today - arc_start_date).days + 1
+        
+        if day_of_arc <= 10:
+            # Проверяем не куплен ли уже доступ
+            cursor.execute('SELECT 1 FROM user_arc_access WHERE user_id = ? AND arc_id = ?', (user_id, arc_id))
+            already_has = cursor.fetchone()
+            
+            if already_has:
+                return False, "У вас уже есть доступ к этой дуге"
+            return True, f"Можно купить (день {day_of_arc} из 10)"
+        else:
+            return False, "Срок покупки истек (можно купить только до 10 дня дуги)"
+            
+    except Exception as e:
+        return False, f"Ошибка проверки: {str(e)}"
+    finally:
+        conn.close()
+
+def grant_trial_access(user_id, company_arc_id):
+    """Выдает БЕСПЛАТНЫЙ пробный доступ к тренингу компании (первые 3 дня)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Проверяем существует ли такая арка компании
+        cursor.execute('SELECT 1 FROM company_arcs WHERE company_arc_id = ?', (company_arc_id,))
+        if not cursor.fetchone():
+            print(f"🚨 Арка компании {company_arc_id} не существует!")
+            return False
+        
+        # Проверяем состоит ли пользователь в этой компании
+        cursor.execute('''
+            SELECT 1 FROM user_companies uc
+            JOIN company_arcs ca ON uc.company_id = ca.company_id
+            WHERE uc.user_id = ? AND ca.company_arc_id = ? AND uc.is_active = 1
+        ''', (user_id, company_arc_id))
+        
+        if not cursor.fetchone():
+            print(f"🚨 Пользователь {user_id} не состоит в компании арки {company_arc_id}")
+            return False
+        
+        # Выдаем пробный доступ
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_arc_access (user_id, company_arc_id, access_type)
+            VALUES (?, ?, 'trial')
+        ''', (user_id, company_arc_id))
+        
+        conn.commit()
+        print(f"✅ Пробный доступ к компании выдан: user {user_id} -> company_arc {company_arc_id}")
+        return True
+    
+    except Exception as e:
+        print(f"🚨 Ошибка при выдаче пробного доступа: {e}")
+        return False
+    
+    finally:
+        conn.close()
+
+def create_yookassa_payment(user_id, company_arc_id, amount, trial=False, description=""):
+    """Создает платеж в Юкассе для доступа к тренингу компании - С ВСЕМИ МЕТОДАМИ ОПЛАТЫ"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Создание платежа для компании: user={user_id}, company_arc={company_arc_id}, amount={amount}")
+    
+    import requests
+    import base64
+    import uuid
+    
+    auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    
+    idempotence_key = str(uuid.uuid4())
+    
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/json",
+        "Idempotence-Key": idempotence_key
+    }
+    
+    # Получаем данные компании
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем название компании и стандартного тренинга
+    cursor.execute('''
+        SELECT c.name as company_name, a.title as arc_title
+        FROM company_arcs ca
+        JOIN companies c ON ca.company_id = c.company_id
+        JOIN arcs a ON ca.arc_id = a.arc_id
+        WHERE ca.company_arc_id = ?
+    ''', (company_arc_id,))
+    
+    result = cursor.fetchone()
+    if result:
+        company_name, arc_title = result
+    else:
+        company_name = f"Компания {company_arc_id}"
+        arc_title = "Стандартный тренинг"
+    
+    # Данные пользователя для чека
+    cursor.execute('SELECT phone, fio FROM users WHERE user_id = ?', (user_id,))
+    user_data = cursor.fetchone()
+    user_phone = user_data[0] if user_data and user_data[0] else None
+    user_fio = user_data[1] if user_data and user_data[1] else f"Пользователь {user_id}"
+    
+    conn.close()
+    
+    if not description:
+        if trial:
+            description = f"Пробный доступ к тренингу компании '{company_name}' (3 дня)"
+        else:
+            description = f"Полный доступ к тренингу компании '{company_name}'"
+    
+    # ✅ ВСЕ МЕТОДЫ ОПЛАТЫ (сохраняем вашу логику)
+    payment_data = {
+        "amount": {
+            "value": f"{amount:.2f}",
+            "currency": "RUB"
+        },
+        "payment_method_data": {
+            "type": "bank_card"  # Базовый метод
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": YOOKASSA_RETURN_URL
+        },
+        "description": description,
+        "capture": True,
+        "metadata": {
+            "user_id": user_id,
+            "company_arc_id": company_arc_id,  # Изменили arc_id → company_arc_id
+            "trial": trial,
+            "company_name": company_name,
+            "arc_title": arc_title
+        },
+        "receipt": {
+            "customer": {
+                "full_name": user_fio[:256]
+            },
+            "items": [
+                {
+                    "description": f"Доступ к тренингу компании: {company_name}"[:128],
+                    "quantity": "1.00",
+                    "amount": {
+                        "value": f"{amount:.2f}",
+                        "currency": "RUB"
+                    },
+                    "vat_code": "1",
+                    "payment_mode": "full_payment",
+                    "payment_subject": "service",
+                    "country_of_origin_code": "643"
+                }
+            ]
+        }
+    }
+    
+    # Добавляем телефон если есть
+    if user_phone:
+        payment_data["receipt"]["customer"]["phone"] = user_phone
+    
+    # ✅ Убираем payment_method_data чтобы Юкасса показывала ВСЕ методы
+    payment_data.pop("payment_method_data", None)
+    
+    logger.info(f"Создание платежа для компании '{company_name}'")
+    
+    try:
+        response = requests.post(
+            YOOKASSA_API_URL, 
+            json=payment_data, 
+            headers=headers, 
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            payment_info = response.json()
+            payment_id = payment_info["id"]
+            confirmation_url = payment_info["confirmation"]["confirmation_url"]
+            
+            logger.info(f"✅ Платеж для компании создан: {payment_id}")
+            
+            # Сохраняем в БД (используем обновленную save_payment)
+            save_payment(user_id, company_arc_id, amount, payment_id, 'pending')
+            
+            return confirmation_url, payment_id
+        else:
+            error_msg = f"Ошибка {response.status_code}: {response.text}"
+            logger.error(error_msg)
+            return None, error_msg
+            
+    except Exception as e:
+        error_msg = f"Исключение: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return None, error_msg
+
+def create_yookassa_payment_simple(user_id, arc_id, amount, trial=False, description=""):
+    """Резервная функция БЕЗ чека (для тестов или если основная не работает)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.warning("⚠️ Используем УПРОЩЕННУЮ версию платежа (без чека)")
+    
+    import requests
+    import base64
+    import uuid
+    
+    auth_string = f'{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}'
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    
+    idempotence_key = str(uuid.uuid4())
+    
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/json",
+        "Idempotence-Key": idempotence_key
+    }
+    
+    # Получаем название части
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
+    arc_title = cursor.fetchone()[0]
+    conn.close()
+    
+    if not description:
+        if trial:
+            description = f"Пробный доступ к части '{arc_title}' (3 задания)"
+        else:
+            description = f"Полный доступ к части '{arc_title}'"
+    
+    # ✅ УПРОЩЕННЫЕ ДАННЫЕ БЕЗ receipt
+    payment_data = {
+        "amount": {
+            "value": f"{amount:.2f}",
+            "currency": "RUB"
+        },
+        "payment_method_data": {
+            "type": "bank_card"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": YOOKASSA_RETURN_URL
+        },
+        "description": description,
+        "capture": True,
+        "metadata": {
+            "user_id": user_id,
+            "arc_id": arc_id,
+            "trial": trial,
+            "arc_title": arc_title
+        }
+    }
+    
+    try:
+        response = requests.post(YOOKASSA_API_URL, json=payment_data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            payment_info = response.json()
+            payment_id = payment_info["id"]
+            confirmation_url = payment_info["confirmation"]["confirmation_url"]
+            
+            logger.info(f"✅ Упрощенный платеж создан: {payment_id}")
+            
+            # Сохраняем в БД
+            save_payment(user_id, arc_id, amount, payment_id, 'pending')
+            
+            return confirmation_url, payment_id
+        else:
+            error_msg = f"Ошибка упрощенного платежа {response.status_code}: {response.text}"
+            logger.error(error_msg)
+            return None, error_msg
+            
+    except Exception as e:
+        error_msg = f"Исключение в упрощенной версии: {str(e)}"
+        logger.error(error_msg)
+        return None, error_msg
+
+def handle_yookassa_webhook(data):
+    """Обрабатывает webhook от Юкассы и отправляет уведомления"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        event = data.get("event")
+        payment_obj = data.get("object")
+        
+        logger.info(f"Обработка webhook: event={event}")
+        
+        if event == "payment.succeeded":
+            payment_id = payment_obj.get("id")
+            status = payment_obj.get("status")
+            amount = payment_obj.get("amount", {}).get("value")
+            
+            # Обновляем статус
+            update_payment_status(payment_id, status)
+            
+            # Получаем информацию о платеже
+            conn = sqlite3.connect('mentor_bot.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, arc_id FROM payments WHERE yookassa_payment_id = ?', (payment_id,))
+            payment_data = cursor.fetchone()
+            
+            if payment_data:
+                user_id, arc_id = payment_data
+                
+                # Получаем название части
+                cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
+                arc_title = cursor.fetchone()[0]
+                
+                conn.close()
+                
+                # ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ
+                send_payment_notification(user_id, arc_title, amount, payment_id)
+                
+                logger.info(f"✅ Платеж {payment_id} обработан, уведомление отправлено user={user_id}")
+                return True, f"Платеж {payment_id} обработан"
+            else:
+                logger.error(f"Платеж {payment_id} не найден в БД")
+                return False, "Платеж не найден"
+                
+        elif event == "payment.canceled":
+            payment_id = payment_obj.get("id")
+            update_payment_status(payment_id, "canceled")
+            return True, f"Платеж {payment_id} отменен"
+            
+        else:
+            logger.warning(f"Неизвестное событие: {event}")
+            return False, f"Неизвестное событие: {event}"
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
+        return False, f"Ошибка: {str(e)}"
+
+
+def check_assignment_status(user_id, assignment_id):
+    """Проверяет статус задания для пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT status FROM user_progress_advanced 
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (user_id, assignment_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return result[0]  # 'submitted', 'approved'
+    return 'new'  # Новое задание
+
+def can_access_assignment(user_id, assignment_id, arc_id=None):
+    """Проверяет может ли пользователь получить доступ к заданию"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Если не передан arc_id, находим его
+        if not arc_id:
+            cursor.execute('''
+                SELECT d.arc_id, d.order_num as day_order
+                FROM assignments a
+                JOIN days d ON a.day_id = d.day_id
+                WHERE a.assignment_id = ?
+            ''', (assignment_id,))
+            result = cursor.fetchone()
+            if result:
+                arc_id, day_order = result
+            else:
+                return False, "Задание не найдено"
+        else:
+            # Получаем номер дня для этого задания
+            cursor.execute('''
+                SELECT d.order_num as day_order
+                FROM assignments a
+                JOIN days d ON a.day_id = d.day_id
+                WHERE a.assignment_id = ? AND d.arc_id = ?
+            ''', (assignment_id, arc_id))
+            result = cursor.fetchone()
+            if result:
+                day_order = result[0]
+            else:
+                return False, "Задание не найдено"
+        
+        # Проверяем общий доступ к дуге
+        cursor.execute('SELECT access_type FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
+                      (user_id, arc_id))
+        access = cursor.fetchone()
+        
+        if not access:
+            return False, "Нет доступа к этому марафону"
+        
+        access_type = access[0]
+        
+        # ★★★ ИСПРАВЛЕННАЯ ЛОГИКА: ★★★
+        # Если это пробный доступ, проверяем что задание в первых 3 ДНЯХ
+        if access_type == 'trial':
+            if day_order > 3:  # Проверяем номер ДНЯ (не задания!)
+                return False, "Пробный доступ ограничен первыми 3 днями. Купите полный доступ."
+        
+        return True, "Доступ разрешен"
+        
+    except Exception as e:
+        return False, f"Ошибка проверки: {str(e)}"
+    finally:
+        conn.close()
+
+def has_new_feedback(user_id):
+    """Проверяет есть ли новые непросмотренные ответы"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) 
+        FROM user_progress_advanced upa
+        WHERE upa.user_id = ? 
+        AND upa.status = 'approved'
+        AND upa.teacher_comment IS NOT NULL
+        AND upa.viewed_by_student = 0
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] > 0 if result else False
+
+def get_arcs_with_feedback(user_id):
+    """Возвращает части с ответами и кол-вом новых (по новой логике)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT ar.arc_id, ar.title,
+               COUNT(CASE WHEN upa.has_additional_comment = 1 AND upa.additional_comment_viewed = 0 THEN 1 END) as new_count,
+               COUNT(*) as total_count
+        FROM arcs ar
+        JOIN days d ON ar.arc_id = d.arc_id
+        JOIN assignments a ON d.day_id = a.day_id
+        JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id
+        WHERE upa.user_id = ? AND upa.status = 'approved'
+        GROUP BY ar.arc_id
+        ORDER BY ar.order_num
+    ''', (user_id,))
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+def get_feedback_counts(user_id, arc_id):
+    """Возвращает количество новых и завершенных ответов по новой логике"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # ★★ ИЗМЕНЕНИЕ: Новые ответы - задания с дополнительными комментариями, которые НЕ просмотрены
+    cursor.execute('''
+        SELECT COUNT(*)
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
+        WHERE upa.user_id = ? 
+          AND upa.status = 'approved'
+          AND upa.has_additional_comment = 1
+          AND upa.additional_comment_viewed = 0
+          AND d.arc_id = ?
+    ''', (user_id, arc_id))
+    
+    new_count = cursor.fetchone()[0] or 0
+    
+    # ★★ ИЗМЕНЕНИЕ: Завершенные - все approved задания, включая автоматически принятые
+    cursor.execute('''
+        SELECT COUNT(*)
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
+        WHERE upa.user_id = ? 
+          AND upa.status = 'approved'
+          AND d.arc_id = ?
+    ''', (user_id, arc_id))
+    
+    completed_count = cursor.fetchone()[0] or 0
+    
+    conn.close()
+    return new_count, completed_count
+
+def decline_offer(user_id):
+    """Упрощенная версия - без declined_offer_date"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE users 
+            SET accepted_offer = 0
+            WHERE user_id = ?
+        ''', (user_id,))
+        
+        conn.commit()
+        print(f"❌ Оферта отклонена пользователем {user_id}")
+        
+    except Exception as e:
+        print(f"🚨 Ошибка при отклонении оферты: {e}")
+        
+        # Пробуем еще проще
+        try:
+            cursor.execute('''
+                UPDATE users 
+                SET accepted_offer = 0
+                WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
+            print(f"✅ Упрощенная запись выполнена")
+        except Exception as e2:
+            print(f"❌ Даже упрощенная запись не удалась: {e2}")
+    finally:
+        conn.close()
+
+def get_users_for_notification(recipient_type='all'):
+    """Упрощенный вариант - для 'full' берем всех кто есть в user_arc_access"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # ID админов
+    cursor.execute('SELECT user_id FROM users WHERE is_admin = 1')
+    admin_ids = [row[0] for row in cursor.fetchall()]
+    admin_ids_str = ','.join(map(str, admin_ids)) if admin_ids else '0'
+    
+    if recipient_type == 'full':
+        # ВСЕ пользователи у которых есть хоть один доступ в user_arc_access
+        cursor.execute(f'''
+            SELECT DISTINCT u.user_id, 
+                   COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+                   u.username
+            FROM users u
+            WHERE u.user_id NOT IN ({admin_ids_str})
+              AND u.user_id IN (SELECT DISTINCT user_id FROM user_arc_access)
+        ''')
+        
+    elif recipient_type == 'trial':
+        # Только пользователи с типом доступа 'trial'
+        cursor.execute(f'''
+            SELECT DISTINCT u.user_id, 
+                   COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+                   u.username
+            FROM users u
+            WHERE u.user_id NOT IN ({admin_ids_str})
+              AND u.user_id IN (
+                  SELECT DISTINCT user_id 
+                  FROM user_arc_access 
+                  WHERE access_type = 'trial'
+              )
+        ''')
+        
+    else:
+        # Все пользователи (кроме админов)
+        cursor.execute(f'''
+            SELECT DISTINCT u.user_id, 
+                   COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+                   u.username
+            FROM users u
+            WHERE u.user_id NOT IN ({admin_ids_str})
+        ''')
+    
+    users = cursor.fetchall()
+    conn.close()
+    
+    print(f"📊 Найдено пользователей для уведомления ({recipient_type}): {len(users)}")
+    return users
+
+def save_notification_log(admin_id, recipient_type, text, photo_id=None, success_count=0, fail_count=0):
+    """Сохраняет лог отправки уведомлений"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notification_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER,
+                recipient_type TEXT,
+                text TEXT,
+                photo_id TEXT,
+                success_count INTEGER,
+                fail_count INTEGER,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Обрезаем текст если слишком длинный
+        short_text = text[:500] + "..." if text and len(text) > 500 else text
+        
+        cursor.execute('''
+            INSERT INTO notification_logs 
+            (admin_id, recipient_type, text, photo_id, success_count, fail_count)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (admin_id, recipient_type, short_text, photo_id, success_count, fail_count))
+        
+        conn.commit()
+        print(f"✅ Лог уведомления сохранен: {recipient_type}, успешно {success_count}")
+        
+    except Exception as e:
+        print(f"🚨 Ошибка сохранения лога: {e}")
+    finally:
+        conn.close()
+
+def is_admin(user_id):
+    """Проверяет является ли пользователь админом"""
+    try:
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        # Проверяем поле is_admin
+        cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        
+        # Если есть запись и is_admin = 1
+        if result and result[0] == 1:
+            conn.close()
+            return True
+        
+        # Проверяем конфиг
+        from config import ADMIN_ID, ADMIN_IDS
+        conn.close()
+        return user_id == ADMIN_ID or (hasattr(ADMIN_IDS, '__contains__') and user_id in ADMIN_IDS)
+        
+    except Exception as e:
+        print(f"🚨 Ошибка проверки админа {user_id}: {e}")
+        from config import ADMIN_ID, ADMIN_IDS
+        return user_id == ADMIN_ID or (hasattr(ADMIN_IDS, '__contains__') and user_id in ADMIN_IDS)
+
+def set_user_as_admin(user_id):
+    """Устанавливает пользователя как администратора"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET is_admin = 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    print(f"✅ Пользователь {user_id} установлен как администратор")
+
+
+def get_user_active_arcs(user_id):
+    """Получает активные части/компании пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Для админов
+    cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    is_admin = user and user[0] == 1
+    
+    if is_admin:
+        # Для админа - все доступы
+        cursor.execute('''
+            SELECT 
+                COALESCE(uaa.arc_id, uaa.company_arc_id) as id,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.title
+                    ELSE c.name
+                END as title,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.дата_начала
+                    ELSE ca.actual_start_date
+                END as start_date,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.дата_окончания
+                    ELSE ca.actual_end_date
+                END as end_date,
+                uaa.access_type,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN 'arc'
+                    ELSE 'company'
+                END as type
+            FROM user_arc_access uaa
+            LEFT JOIN arcs a ON uaa.arc_id = a.arc_id
+            LEFT JOIN company_arcs ca ON uaa.company_arc_id = ca.company_arc_id
+            LEFT JOIN companies c ON ca.company_id = c.company_id
+            WHERE uaa.user_id = ?
+            ORDER BY start_date
+        ''', (user_id,))
+    else:
+        # Для обычных пользователей
+        cursor.execute('''
+            SELECT 
+                COALESCE(uaa.arc_id, uaa.company_arc_id) as id,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.title
+                    ELSE c.name
+                END as title,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.дата_начала
+                    ELSE ca.actual_start_date
+                END as start_date,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN a.дата_окончания
+                    ELSE ca.actual_end_date
+                END as end_date,
+                uaa.access_type,
+                CASE 
+                    WHEN uaa.arc_id IS NOT NULL THEN 'arc'
+                    ELSE 'company'
+                END as type
+            FROM user_arc_access uaa
+            LEFT JOIN arcs a ON uaa.arc_id = a.arc_id
+            LEFT JOIN company_arcs ca ON uaa.company_arc_id = ca.company_arc_id
+            LEFT JOIN companies c ON ca.company_id = c.company_id
+            WHERE uaa.user_id = ?
+            AND (
+                (uaa.arc_id IS NOT NULL AND a.дата_начала IS NOT NULL AND a.дата_начала != '')
+                OR
+                (uaa.company_arc_id IS NOT NULL AND ca.actual_start_date IS NOT NULL)
+            )
+            ORDER BY start_date
+        ''', (user_id,))
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    
+    return arcs
+
+def save_assignment_answer_with_day_auto_approve(user_id, assignment_id, day_id, answer_text, answer_files):
+    """Сохраняет ответ на задание с автоматическим принятием"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сохраняем файлы как JSON
+    files_json = json.dumps(answer_files) if answer_files else None
+    
+    # Автоматический комментарий психолога
+    auto_comment = "✅ Задание принято автоматически."
+    
+    # ★★ ИЗМЕНЕНИЕ: Сохраняем с флагами для автоматического комментария
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_progress_advanced 
+        (user_id, assignment_id, answer_text, answer_files, status, teacher_comment, 
+         viewed_by_student, has_additional_comment, additional_comment_viewed)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)
+    ''', (user_id, assignment_id, answer_text, files_json, 'approved', auto_comment))
+    
+    # Обновляем статистику дня если есть day_id
+    if day_id:
+        try:
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_daily_stats 
+                (user_id, arc_id, day_id, date, assignments_completed, is_skipped)
+                VALUES (?, 
+                       (SELECT d.arc_id FROM days d JOIN assignments a ON d.day_id = a.day_id WHERE a.assignment_id = ?),
+                       ?, DATE('now'), 1, 0)
+            ''', (user_id, assignment_id, day_id))
+        except Exception as e:
+            print(f"⚠️ Ошибка обновления статистики дня: {e}")
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Задание {assignment_id} автоматически принято для пользователя {user_id}")
+
+def save_assignment_media(assignment_id, photos=None, audios=None, video_url=None):
+    """Сохраняет медиа-контент для задания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        photos_json = json.dumps(photos) if photos else None
+        audios_json = json.dumps(audios) if audios else None
+        
+        cursor.execute('''
+            UPDATE assignments 
+            SET content_photos = ?, content_audios = ?, video_url = ?
+            WHERE assignment_id = ?
+        ''', (photos_json, audios_json, video_url, assignment_id))
+        
+        conn.commit()
+        print(f"✅ Медиа сохранены для задания {assignment_id}")
+        return True
+    except Exception as e:
+        print(f"🚨 Ошибка сохранения медиа: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_assignment_media(assignment_id):
+    """Получает медиа-контент задания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT content_photos, content_audios, video_url
+        FROM assignments 
+        WHERE assignment_id = ?
+    ''', (assignment_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        photos_json, audios_json, video_url = result
+        
+        # Парсим JSON
+        photos = []
+        audios = []
+        
+        if photos_json:
+            try:
+                photos = json.loads(photos_json)
+            except:
+                photos = []
+        
+        if audios_json:
+            try:
+                audios = json.loads(audios_json)
+            except:
+                audios = []
+        
+        return {
+            'photos': photos,
+            'audios': audios,
+            'video_url': video_url
+        }
+    
+    return {
+        'photos': [],
+        'audios': [],
+        'video_url': None
+    }
+
+def update_assignment_with_media_simple(file_path='courses_data.xlsx'):
+    """Простая загрузка медиа с отладкой"""
+    try:
+        print("=" * 50)
+        print("🔄 НАЧАЛО ЗАГРУЗКИ МЕДИА ИЗ EXCEL")
+        print("=" * 50)
+        
+        # 1. Проверяем файл
+        import os
+        if not os.path.exists(file_path):
+            print(f"❌ Файл {file_path} не найден!")
+            print(f"📁 Текущая папка: {os.getcwd()}")
+            return 0
+        
+        print(f"✅ Файл найден: {file_path}")
+        
+        # 2. Читаем Excel
+        import pandas as pd
+        df = pd.read_excel(file_path, sheet_name='Задания', dtype=str, keep_default_na=False)
+        print(f"📊 Прочитано {len(df)} строк из листа 'Задания'")
+        
+        # 3. Показываем колонки
+        print("📋 Колонки в файле:")
+        for col in df.columns:
+            print(f"  • '{col}'")
+        
+        # 4. Ищем колонку 'фото'
+        photo_column = None
+        for col in df.columns:
+            if 'фото' in str(col).lower():
+                photo_column = col
+                print(f"✅ Найдена колонка фото: '{col}'")
+                break
+        
+        if not photo_column:
+            print("❌ Колонка 'фото' не найдена!")
+            print("Доступные колонки:")
+            for col in df.columns:
+                print(f"  • {col}")
+            return 0
+        
+        # 5. Подключаемся к БД
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        updated_count = 0
+        
+        # 6. Обрабатываем каждую строку
+        for index, row in df.iterrows():
+            try:
+                # ID задания
+                id_str = str(row.get('id', '')).strip()
+                if not id_str:
+                    continue
+                
+                assignment_id = int(float(id_str))
+                
+                # Фото
+                photo_val = str(row.get(photo_column, '')).strip()
+                print(f"\n🔍 Строка {index+2}, Задание {assignment_id}:")
+                print(f"  📸 Значение фото: '{photo_val}'")
+                print(f"  📏 Длина: {len(photo_val)} символов")
+                
+                if not photo_val or photo_val.lower() in ['nan', 'none', 'null', '']:
+                    print(f"  📭 Пропускаем - пустое значение")
+                    continue
+                
+                # Очищаем
+                clean_photo = photo_val
+                clean_photo = clean_photo.replace('[', '').replace(']', '')
+                clean_photo = clean_photo.replace('"', '').replace("'", "")
+                clean_photo = clean_photo.strip()
+                
+                print(f"  🧹 Очищенное: '{clean_photo}'")
+                
+                if len(clean_photo) < 50:  # file_id обычно длинный
+                    print(f"  ⚠️  Подозрительно короткий: {len(clean_photo)} символов")
+                    continue
+                
+                # Создаем JSON
+                photos_json = json.dumps([clean_photo])
+                print(f"  📋 JSON: {photos_json}")
+                
+                # Обновляем БД
+                cursor.execute('SELECT title FROM assignments WHERE assignment_id = ?', (assignment_id,))
+                if cursor.fetchone():
+                    cursor.execute('''
+                        UPDATE assignments 
+                        SET content_photos = ?
+                        WHERE assignment_id = ?
+                    ''', (photos_json, assignment_id))
+                    
+                    if cursor.rowcount > 0:
+                        updated_count += 1
+                        print(f"  ✅ ОБНОВЛЕНО!")
+                    else:
+                        print(f"  ⚠️  Задание найдено, но не обновлено")
+                else:
+                    print(f"  ❌ Задание {assignment_id} не найдено в БД")
+                    
+            except Exception as e:
+                print(f"  ❌ Ошибка обработки строки: {e}")
+        
+        # 7. Сохраняем и закрываем
+        conn.commit()
+        conn.close()
+        
+        print("\n" + "=" * 50)
+        print(f"📊 ИТОГ ЗАГРУЗКИ:")
+        print(f"✅ Обновлено заданий: {updated_count}")
+        print("=" * 50)
+        
+        return updated_count
+        
+    except Exception as e:
+        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def get_arcs_with_dates():
+    """Возвращает дуги у которых указаны даты начала и окончания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT arc_id, title, order_num, price, 
+               дата_начала, дата_окончания, бесплатный_период
+        FROM arcs 
+        WHERE status = 'active'
+        AND дата_начала IS NOT NULL 
+        AND дата_окончания IS NOT NULL
+        AND дата_начала != ''
+        AND дата_окончания != ''
+        ORDER BY order_num
+    ''')
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+def get_current_and_future_arcs():
+    """Получает текущие и будущие дуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # УБИРАЕМ status из WHERE
+    cursor.execute('''
+        SELECT arc_id, title, дата_начала, дата_окончания, price
+        FROM arcs 
+        WHERE дата_начала IS NOT NULL 
+        AND дата_окончания IS NOT NULL
+        ORDER BY дата_начала
+    ''')
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+def load_all_media_from_excel(file_path='courses_data.xlsx'):
+    """Загружает ВСЕ типы медиа из Excel: фото, аудио, видео ссылки"""
+    try:
+        print("=" * 60)
+        print("🔄 УНИВЕРСАЛЬНАЯ ЗАГРУЗКА МЕДИА ИЗ EXCEL")
+        print("=" * 60)
+        
+        import os
+        import pandas as pd
+        import json
+        
+        # Проверка файла
+        if not os.path.exists(file_path):
+            print(f"❌ Файл {file_path} не найден!")
+            return {'status': 'error', 'message': 'Файл не найден', 'details': {}}
+        
+        print(f"✅ Файл найден: {file_path}")
+        
+        # Читаем Excel
+        df = pd.read_excel(file_path, sheet_name='Задания', dtype=str, keep_default_na=False)
+        print(f"📊 Прочитано {len(df)} строк")
+        
+        # Проверяем колонки
+        columns_found = []
+        columns_missing = []
+        
+        target_columns = {
+            'фото': 'content_photos',
+            'аудио': 'content_audios', 
+            'видео_ссылка': 'video_url'
+        }
+        
+        print("🔍 Поиск колонок в Excel:")
+        for excel_col, db_field in target_columns.items():
+            if excel_col in df.columns:
+                columns_found.append(excel_col)
+                print(f"  ✅ '{excel_col}' → {db_field}")
+            else:
+                columns_missing.append(excel_col)
+                print(f"  ❌ '{excel_col}' не найдена")
+        
+        if not columns_found:
+            print("⚠️  Не найдено ни одной колонки с медиа!")
+            return {'status': 'error', 'message': 'Колонки медиа не найдены', 'details': {}}
+        
+        # Подключаемся к БД
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        stats = {
+            'total_rows': len(df),
+            'updated_assignments': 0,
+            'photos_loaded': 0,
+            'audios_loaded': 0,
+            'videos_loaded': 0,
+            'errors': 0,
+            'by_type': {}
+        }
+        
+        print("\n📝 Обработка заданий:")
+        
+        # Обрабатываем каждую строку
+        for index, row in df.iterrows():
+            try:
+                # ID задания
+                id_str = str(row.get('id', '')).strip()
+                if not id_str:
+                    continue
+                
+                assignment_id = int(float(id_str))
+                print(f"\n🔍 Задание {assignment_id}:")
+                
+                # Проверяем существует ли задание в БД
+                cursor.execute('SELECT title FROM assignments WHERE assignment_id = ?', (assignment_id,))
+                assignment_exists = cursor.fetchone()
+                
+                if not assignment_exists:
+                    print(f"  ⚠️  Задание не найдено в БД, пропускаем")
+                    continue
+                
+                # Подготавливаем данные для UPDATE
+                update_data = {}
+                update_sql_parts = []
+                update_params = []
+                
+                # 1. ФОТО
+                if 'фото' in df.columns:
+                    photo_val = str(row.get('фото', '')).strip()
+                    if photo_val and photo_val.lower() not in ['nan', 'none', 'null', '']:
+                        # Очищаем и создаем JSON
+                        clean_photo = photo_val.replace('[', '').replace(']', '').replace('"', '').replace("'", "").strip()
+                        if len(clean_photo) > 30:  # Проверяем что похоже на file_id
+                            photos_json = json.dumps([clean_photo])
+                            update_data['content_photos'] = photos_json
+                            update_sql_parts.append('content_photos = ?')
+                            update_params.append(photos_json)
+                            stats['photos_loaded'] += 1
+                            print(f"  📸 Фото: добавлено ({clean_photo[:30]}...)")
+                
+                # 2. АУДИО
+                if 'аудио' in df.columns:
+                    audio_val = str(row.get('аудио', '')).strip()
+                    if audio_val and audio_val.lower() not in ['nan', 'none', 'null', '']:
+                        clean_audio = audio_val.replace('[', '').replace(']', '').replace('"', '').replace("'", "").strip()
+                        if len(clean_audio) > 30:
+                            audios_json = json.dumps([clean_audio])
+                            update_data['content_audios'] = audios_json
+                            update_sql_parts.append('content_audios = ?')
+                            update_params.append(audios_json)
+                            stats['audios_loaded'] += 1
+                            print(f"  🎵 Аудио: добавлено ({clean_audio[:30]}...)")
+                
+                # 3. ВИДЕО ССЫЛКА
+                # В обработке видео добавьте поддержку file_id:
+                if 'видео_ссылка' in df.columns:
+                    video_val = str(row.get('видео_ссылка', '')).strip()
+                    if video_val and video_val.lower() not in ['nan', 'none', 'null', '']:
+                        # Очищаем
+                        clean_video = video_val.strip()
+                        
+                        # Проверяем: это file_id или ссылка?
+                        # File_id видео обычно начинается с BAACAgI или CgACAgI
+                        if clean_video.startswith(('BAACAgI', 'CgACAgI', 'BAACAgQ')):
+                            # Это file_id - сохраняем как есть
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (file_id): добавлено")
+                        
+                        # Это YouTube ссылка
+                        elif 'youtube.com' in clean_video or 'youtu.be' in clean_video:
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (YouTube): добавлено")
+                        
+                        # Другая ссылка
+                        elif clean_video.startswith('http'):
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (ссылка): добавлено")
+                
+                # Если есть что обновлять
+                if update_sql_parts:
+                    update_sql = ', '.join(update_sql_parts)
+                    update_params.append(assignment_id)  # WHERE условие
+                    
+                    cursor.execute(f'''
+                        UPDATE assignments 
+                        SET {update_sql}
+                        WHERE assignment_id = ?
+                    ''', update_params)
+                    
+                    if cursor.rowcount > 0:
+                        stats['updated_assignments'] += 1
+                        print(f"  ✅ Обновлено в БД")
+                    else:
+                        print(f"  ⚠️  Не обновлено (возможно данные те же)")
+                
+            except Exception as e:
+                stats['errors'] += 1
+                print(f"  ❌ Ошибка: {str(e)[:50]}")
+        
+        # Сохраняем и закрываем
+        conn.commit()
+        conn.close()
+        
+        # Формируем итоговую статистику
+        print("\n" + "=" * 60)
+        print("📊 ИТОГ ЗАГРУЗКИ:")
+        print(f"✅ Обработано строк: {stats['total_rows']}")
+        print(f"✅ Обновлено заданий: {stats['updated_assignments']}")
+        print(f"✅ Загружено фото: {stats['photos_loaded']}")
+        print(f"✅ Загружено аудио: {stats['audios_loaded']}")
+        print(f"✅ Загружено видео: {stats['videos_loaded']}")
+        print(f"❌ Ошибок: {stats['errors']}")
+        print("=" * 60)
+        
+        return {
+            'status': 'success',
+            'message': 'Медиа загружены успешно',
+            'stats': stats
+        }
+        
+    except Exception as e:
+        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'status': 'error', 'message': f'Ошибка: {str(e)}', 'details': {}}
+
+# ==================== ТЕСТИРОВАНИЕ ====================
+
+def load_tests_from_excel(file_path='courses_data.xlsx'):  # ← исправлено название
+    """Загружает тесты из Excel файла"""
+    try:
+        df = pd.read_excel(file_path, sheet_name='Тесты')
+        print(f"📊 Найден лист 'Тесты' с {len(df)} строками")
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        loaded_count = 0
+        
+        for index, row in df.iterrows():
+            test_id = row.get('test_id')
+            week_num = row.get('week_num')
+            question_text = row.get('question_text', '')
+            
+            # Пропускаем пустые строки
+            if pd.isna(week_num) or pd.isna(question_text) or str(question_text).strip() == '':
+                continue
+            
+            # Парсим варианты ответов
+            option1 = row.get('option1', '')
+            option2 = row.get('option2', '')
+            option3 = row.get('option3', '')
+            option4 = row.get('option4', '')
+            option5 = row.get('option5', '')
+            correct_option = row.get('correct_option', 'option1')
+            explanation = row.get('explanation', '')
+            
+            # Преобразуем correct_option в формат optionX
+            # Если в Excel текст типа "ответ 1", преобразуем в "option1"
+            if isinstance(correct_option, str):
+                if 'ответ' in correct_option.lower():
+                    # Из "ответ 1" делаем "option1"
+                    import re
+                    match = re.search(r'(\d+)', correct_option)
+                    if match:
+                        num = match.group(1)
+                        correct_option = f"option{num}"
+                elif correct_option.startswith('option'):
+                    # Уже в правильном формате
+                    pass
+                else:
+                    # Пробуем понять что это
+                    if correct_option == option1:
+                        correct_option = 'option1'
+                    elif correct_option == option2:
+                        correct_option = 'option2'
+                    elif correct_option == option3:
+                        correct_option = 'option3'
+                    elif correct_option == option4:
+                        correct_option = 'option4'
+                    elif correct_option == option5:
+                        correct_option = 'option5'
+            
+            # Проверяем существование
+            cursor.execute('''
+                SELECT test_id FROM tests 
+                WHERE week_num = ? AND question_text = ?
+            ''', (int(week_num), str(question_text)))
+            
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Обновляем существующий
+                cursor.execute('''
+                    UPDATE tests SET
+                    option1 = ?, option2 = ?, option3 = ?, option4 = ?, option5 = ?,
+                    correct_option = ?, explanation = ?
+                    WHERE test_id = ?
+                ''', (str(option1), str(option2), str(option3), str(option4), str(option5), 
+                      str(correct_option), str(explanation), exists[0]))
+            else:
+                # Добавляем новый
+                cursor.execute('''
+                    INSERT INTO tests 
+                    (week_num, question_text, option1, option2, option3, 
+                     option4, option5, correct_option, explanation)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (int(week_num), str(question_text), str(option1), str(option2), 
+                      str(option3), str(option4), str(option5), 
+                      str(correct_option), str(explanation)))
+            
+            loaded_count += 1
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Загружено {loaded_count} вопросов для тестов")
+        return loaded_count
+        
+    except Exception as e:
+        print(f"🚨 Ошибка загрузки тестов из Excel: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def get_tests_for_week(week_num):
+    """Получает все вопросы для теста конкретной недели"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT test_id, question_text, option1, option2, option3, option4, option5, 
+               correct_option, explanation
+        FROM tests 
+        WHERE week_num = ?
+        ORDER BY test_id
+    ''', (week_num,))
+    
+    tests = cursor.fetchall()
+    conn.close()
+    
+    return tests
+
+def get_available_tests(user_id, arc_id):
+    """Возвращает доступные тесты для пользователя - НОВАЯ ЛОГИКА"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем текущий день в марафоне
+    current_day_info = get_current_arc_day(user_id, arc_id)
+    current_day = current_day_info['day_number'] if current_day_info else 0
+    
+    print(f"🔍 DEBUG: user_id={user_id}, arc_id={arc_id}, current_day={current_day}")
+    
+    # ★★ НОВАЯ ЛОГИКА: тесты доступны в диапазонах дней ★★
+    available_weeks = []
+    
+    if 1 <= current_day <= 7:  # Дни 1-7
+        available_weeks.append(1)
+    if 8 <= current_day <= 14:  # Дни 8-14
+        available_weeks.append(2)
+    if 15 <= current_day <= 21:  # Дни 15-21
+        available_weeks.append(3)
+    if 22 <= current_day <= 28:  # Дни 22-28
+        available_weeks.append(4)
+    
+    # Проверяем какие тесты уже пройдены
+    cursor.execute('''
+        SELECT week_num FROM test_results 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
+    
+    completed_weeks = [row[0] for row in cursor.fetchall()]
+    
+    # Фильтруем доступные
+    result = []
+    for week in available_weeks:
+        status = "пройден" if week in completed_weeks else "доступен"
+        result.append({
+            'week_num': week,
+            'status': status,
+            'completed': week in completed_weeks
+        })
+    
+    conn.close()
+    print(f"🔍 DEBUG: доступные недели: {result}")
+    return result
+
+def get_test_progress(user_id, arc_id, week_num):
+    """Получает прогресс теста (если прервали)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT current_question, answers_json 
+        FROM test_progress 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        current_question, answers_json = result
+        answers = json.loads(answers_json) if answers_json else {}
+        return {
+            'current_question': current_question,
+            'answers': answers
+        }
+    return None
+
+def save_test_progress(user_id, arc_id, week_num, current_question, answers):
+    """Сохраняет прогресс теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    answers_json = json.dumps(answers)
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_progress 
+        (user_id, arc_id, week_num, current_question, answers_json)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, arc_id, week_num, current_question, answers_json))
+    
+    conn.commit()
+    conn.close()
+
+def clear_test_progress(user_id, arc_id, week_num):
+    """Очищает прогресс теста (после завершения)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM test_progress 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    conn.commit()
+    conn.close()
+
+def save_test_result(user_id, arc_id, week_num, answers, score):
+    """Сохраняет результат теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    answers_json = json.dumps(answers)
+    
+    cursor.execute('''
+        INSERT INTO test_results 
+        (user_id, arc_id, week_num, answers_json, score)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, arc_id, week_num, answers_json, score))
+    
+    conn.commit()
+    conn.close()
+    
+    # Очищаем прогресс
+    clear_test_progress(user_id, arc_id, week_num)
+    
+    return cursor.lastrowid
+
+def get_test_result(user_id, arc_id, week_num):
+    """Получает результат теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT result_id, score, answers_json, completed_at
+        FROM test_results 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        result_id, score, answers_json, completed_at = result
+        return {
+            'result_id': result_id,
+            'score': score,
+            'answers': json.loads(answers_json),
+            'completed_at': completed_at
+        }
+    return None
+
+def get_all_test_results(user_id, arc_id=None):
+    """Получает все результаты тестов пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    if arc_id:
+        cursor.execute('''
+            SELECT result_id, arc_id, week_num, score, completed_at
+            FROM test_results 
+            WHERE user_id = ? AND arc_id = ?
+            ORDER BY completed_at DESC
+        ''', (user_id, arc_id))
+    else:
+        cursor.execute('''
+            SELECT result_id, arc_id, week_num, score, completed_at
+            FROM test_results 
+            WHERE user_id = ?
+            ORDER BY completed_at DESC
+        ''', (user_id,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return results
+
+def add_additional_comment_to_assignment(user_id, assignment_id, comment):
+    """Добавляет дополнительный комментарий психолога к заданию"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Получаем текущий комментарий
+        cursor.execute('''
+            SELECT teacher_comment FROM user_progress_advanced 
+            WHERE user_id = ? AND assignment_id = ?
+        ''', (user_id, assignment_id))
+        
+        result = cursor.fetchone()
+        if not result:
+            conn.close()
+            return False
+        
+        current_comment = result[0] or ""
+        
+        # Обновляем комментарий и флаги
+        cursor.execute('''
+            UPDATE user_progress_advanced 
+            SET additional_comment = ?,
+                has_additional_comment = 1,
+                additional_comment_viewed = 0,
+                teacher_comment = ? || '\n\n💬 Комментарий психолога:\n' || ?
+            WHERE user_id = ? AND assignment_id = ?
+        ''', (comment, current_comment, comment, user_id, assignment_id))
+        
+        conn.commit()
+        print(f"✅ Дополнительный комментарий добавлен к заданию {assignment_id}")
+        return True
+        
+    except Exception as e:
+        print(f"🚨 Ошибка добавления комментария: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_additional_comment_status(user_id, assignment_id):
+    """Проверяет статус дополнительного комментария"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT has_additional_comment, additional_comment_viewed, additional_comment
+        FROM user_progress_advanced 
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (user_id, assignment_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        has_comment, is_viewed, comment_text = result
+        return {
+            'has_additional_comment': bool(has_comment),
+            'is_viewed': bool(is_viewed) if is_viewed is not None else False,
+            'comment_text': comment_text
+        }
+    
+    return {'has_additional_comment': False, 'is_viewed': False, 'comment_text': None}
+
+def mark_additional_comment_as_viewed(user_id, assignment_id):
+    """Отмечает дополнительный комментарий как просмотренный"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE user_progress_advanced 
+        SET additional_comment_viewed = 1
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (user_id, assignment_id))
+    
+    conn.commit()
+    conn.close()
+
+# ★★★ ФУНКЦИИ РАБОТЫ С КОМПАНИЯМИ ★★★
+
+def create_company(name, join_key, start_date, end_date=None, tg_group_link=None, 
+                   admin_email=None, price=0, created_by=None):
+    """Создает новую компанию"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO companies 
+            (name, join_key, start_date, end_date, tg_group_link, admin_email, price, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (name, join_key, start_date, end_date, tg_group_link, admin_email, price, created_by))
+        
+        company_id = cursor.lastrowid
+        
+        # Проверяем есть ли стандартный тренинг (arc_id=1)
+        cursor.execute('SELECT 1 FROM arcs WHERE arc_id = 1')
+        if cursor.fetchone():
+            # Автоматически создаем company_arc для стандартного тренинга
+            cursor.execute('''
+                INSERT INTO company_arcs (company_id, arc_id, actual_start_date, actual_end_date)
+                VALUES (?, 1, ?, DATE(?, '+56 days'))
+            ''', (company_id, start_date, start_date))
+            
+            company_arc_id = cursor.lastrowid
+            print(f"✅ Создана компания: {name} (ID: {company_id}), арка: {company_arc_id}")
+        else:
+            print(f"⚠️ Компания создана, но нет стандартного тренинга! arc_id=1 не найден")
+            company_arc_id = None
+        
+        conn.commit()
+        return company_id, company_arc_id
+        
+    except sqlite3.IntegrityError:
+        print(f"❌ Ключ '{join_key}' уже используется")
+        return None, None
+    except Exception as e:
+        print(f"❌ Ошибка создания компании: {e}")
+        return None, None
+    finally:
+        conn.close()
+
+def get_company_by_key(join_key):
+    """Получает компанию по ключу (регистронезависимо)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT company_id, name, start_date, end_date, tg_group_link, 
+               admin_email, price, is_active
+        FROM companies 
+        WHERE UPPER(join_key) = UPPER(?) AND is_active = 1
+    ''', (join_key,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'company_id': result[0],
+            'name': result[1],
+            'start_date': result[2],
+            'end_date': result[3],
+            'tg_group_link': result[4],
+            'admin_email': result[5],
+            'price': result[6],
+            'is_active': result[7]
+        }
+    return None
+
+def get_user_company(user_id):
+    """Получает компанию пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сначала пробуем через user_companies
+    cursor.execute('''
+        SELECT c.company_id, c.name, c.join_key, c.start_date, c.tg_group_link,
+               c.admin_email, c.price, uc.joined_at
+        FROM user_companies uc
+        JOIN companies c ON uc.company_id = c.company_id
+        WHERE uc.user_id = ? AND uc.is_active = 1
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'company_id': result[0],
+            'name': result[1],
+            'join_key': result[2],
+            'start_date': result[3],
+            'tg_group_link': result[4],
+            'admin_email': result[5],
+            'price': result[6],
+            'joined_at': result[7]
+        }
+    return None
+
+def join_user_to_company(user_id, company_id):
+    """Привязывает пользователя к компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Проверяем, не состоит ли уже в другой компании
+        cursor.execute('SELECT company_id FROM user_companies WHERE user_id = ? AND is_active = 1', (user_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Деактивируем старую привязку
+            cursor.execute('UPDATE user_companies SET is_active = 0 WHERE user_id = ?', (user_id,))
+        
+        # Добавляем новую привязку
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_companies (user_id, company_id, is_active)
+            VALUES (?, ?, 1)
+        ''', (user_id, company_id))
+        
+        # Обновляем current_company_id в users
+        cursor.execute('UPDATE users SET current_company_id = ? WHERE user_id = ?', 
+                      (company_id, user_id))
+        
+        conn.commit()
+        print(f"✅ Пользователь {user_id} присоединился к компании {company_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка привязки к компании: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_company_users(company_id):
+    """Получает всех пользователей компании - ИСПРАВЛЕННАЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            u.user_id, 
+            u.username, 
+            u.first_name, 
+            u.fio, 
+            uc.joined_at
+        FROM user_companies uc
+        JOIN users u ON uc.user_id = u.user_id
+        WHERE uc.company_id = ? AND uc.is_active = 1
+        ORDER BY uc.joined_at
+    ''', (company_id,))
+    
+    users = cursor.fetchall()
+    conn.close()
+    
+    return [{
+        'user_id': row[0],
+        'username': row[1],
+        'first_name': row[2],
+        'fio': row[3],
+        'joined_at': row[4]
+    } for row in users]
+
+def get_all_companies():
+    """Получает все компании (для админа) - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # ★★★ ПОЛНЫЙ ЗАПРОС СО ВСЕМИ НУЖНЫМИ КОЛОНКАМИ ★★★
+    cursor.execute('''
+        SELECT 
+            c.company_id, 
+            c.name, 
+            c.join_key, 
+            c.start_date, 
+            c.end_date,
+            c.tg_group_link,
+            c.admin_email,
+            c.price,
+            c.created_by,
+            c.created_at,
+            c.is_active,
+            COUNT(DISTINCT uc.user_id) as user_count
+        FROM companies c
+        LEFT JOIN user_companies uc ON c.company_id = uc.company_id AND uc.is_active = 1
+        WHERE c.is_active = 1
+        GROUP BY c.company_id
+        ORDER BY c.created_at DESC
+    ''')
+    
+    companies = cursor.fetchall()
+    conn.close()
+    
+    # Возвращаем только нужные для отображения поля
+    return [{
+        'company_id': row[0],
+        'name': row[1],
+        'join_key': row[2],
+        'start_date': row[3],
+        'end_date': row[4],
+        'tg_group_link': row[5],
+        'admin_email': row[6],
+        'price': row[7],
+        'created_by': row[8],
+        'created_at': row[9],
+        'is_active': row[10],
+        'user_count': row[11]
+    } for row in companies]
+
+def get_company_arc(company_id):
+    """Получает арку компании - ИСПРАВЛЕННАЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            ca.company_arc_id, 
+            ca.arc_id, 
+            ca.actual_start_date, 
+            ca.actual_end_date, 
+            ca.status
+        FROM company_arcs ca
+        WHERE ca.company_id = ? AND ca.status = 'active'
+        ORDER BY ca.company_arc_id DESC
+        LIMIT 1
+    ''', (company_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'company_arc_id': result[0],
+            'arc_id': result[1],
+            'actual_start_date': result[2],
+            'actual_end_date': result[3],
+            'status': result[4]
+        }
+    return None
+
+def check_user_company_access(user_id):
+    """Проверяет доступ пользователя к любой компании - ИСПРАВЛЕННАЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Проверяем наличие доступа к ЛЮБОЙ компании
+        cursor.execute('''
+            SELECT 1 FROM user_arc_access 
+            WHERE user_id = ? AND company_arc_id IS NOT NULL
+        ''', (user_id,))
+        
+        result = cursor.fetchone()
+        
+        if result:
+            return True, "Есть доступ к компании"
+        else:
+            return False, "Нет доступа к компании"
+        
+    except Exception as e:
+        print(f"🚨 Ошибка проверки доступа к компании: {e}")
+        return False, f"Ошибка: {e}"
+    finally:
+        conn.close()
+
+
+
