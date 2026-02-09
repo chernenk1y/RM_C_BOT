@@ -345,7 +345,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            company_arc_id INTEGER NOT NULL,  -- ★ Связь с аркой компании
+            arc_id INTEGER,           -- ★ СТАРАЯ КОЛОНКА для совместимости
+            company_arc_id INTEGER,   -- ★ НОВАЯ КОЛОНКА для компаний
             amount REAL NOT NULL,
             status TEXT DEFAULT 'pending',
             yookassa_payment_id TEXT UNIQUE,
@@ -353,7 +354,9 @@ def init_db():
             completed_at TIMESTAMP,
             metadata TEXT,
             FOREIGN KEY (user_id) REFERENCES users(user_id),
-            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
+            FOREIGN KEY (arc_id) REFERENCES arcs(arc_id),
+            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id),
+            CHECK (arc_id IS NOT NULL OR company_arc_id IS NOT NULL)  -- Хотя бы одна заполнена
         )
     ''')
     print("✅ Таблица payments создана/проверена")
@@ -2262,6 +2265,8 @@ def get_user_skip_statistics(user_id, company_arc_id):
         return {'error': 'Арка компании не найдена'}
     
     actual_start_date_str, actual_end_date, company_name = arc_result
+
+    company_name = "Регулярный менеджмент(8 недель)"
     
     # Преобразуем дату старта
     try:
@@ -3052,11 +3057,45 @@ def grant_trial_access(user_id, company_arc_id):
             print(f"🚨 Пользователь {user_id} не состоит в компании арки {company_arc_id}")
             return False
         
-        # Выдаем пробный доступ
+        # Проверяем не истек ли уже пробный доступ
         cursor.execute('''
-            INSERT OR REPLACE INTO user_arc_access (user_id, company_arc_id, access_type)
-            VALUES (?, ?, 'trial')
+            SELECT purchased_at FROM user_arc_access 
+            WHERE user_id = ? AND company_arc_id = ? AND access_type = 'trial'
         ''', (user_id, company_arc_id))
+        
+        existing_trial = cursor.fetchone()
+        
+        if existing_trial:
+            # Проверяем не истек ли пробный период
+            from datetime import datetime, timedelta
+            try:
+                trial_start = datetime.fromisoformat(existing_trial[0])
+                trial_end = trial_start + timedelta(days=3)
+                
+                if datetime.now() < trial_end:
+                    print(f"⚠️ У пользователя {user_id} уже есть активный пробный доступ")
+                    return True  # Доступ уже есть и активен
+                else:
+                    # Пробный доступ истек - обновляем дату
+                    print(f"🔄 Пробный доступ истек, обновляем...")
+                    cursor.execute('''
+                        UPDATE user_arc_access 
+                        SET purchased_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ? AND company_arc_id = ? AND access_type = 'trial'
+                    ''', (user_id, company_arc_id))
+            except:
+                # Если ошибка парсинга даты, просто обновляем
+                cursor.execute('''
+                    UPDATE user_arc_access 
+                    SET purchased_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND company_arc_id = ? AND access_type = 'trial'
+                ''', (user_id, company_arc_id))
+        else:
+            # Выдаем новый пробный доступ
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_arc_access (user_id, company_arc_id, access_type)
+                VALUES (?, ?, 'trial')
+            ''', (user_id, company_arc_id))
         
         conn.commit()
         print(f"✅ Пробный доступ к компании выдан: user {user_id} -> company_arc {company_arc_id}")
@@ -3651,7 +3690,7 @@ def set_user_as_admin(user_id):
 
 
 def get_user_active_arcs(user_id):
-    """Получает активные части/компании пользователя"""
+    """Получает активные части/компании пользователя - ИСПРАВЛЕННАЯ: всегда показывает название тренинга"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
@@ -3666,8 +3705,9 @@ def get_user_active_arcs(user_id):
             SELECT 
                 COALESCE(uaa.arc_id, uaa.company_arc_id) as id,
                 CASE 
+                    -- ★★★ ВСЕГДА ПОКАЗЫВАЕМ НАЗВАНИЕ ТРЕНИНГА, НЕ КОМПАНИИ ★★★
                     WHEN uaa.arc_id IS NOT NULL THEN a.title
-                    ELSE c.name
+                    ELSE 'Регулярный менеджмент(8 недель)'  -- Стандартное название для всех компаний
                 END as title,
                 CASE 
                     WHEN uaa.arc_id IS NOT NULL THEN a.дата_начала
@@ -3690,14 +3730,11 @@ def get_user_active_arcs(user_id):
             ORDER BY start_date
         ''', (user_id,))
     else:
-        # Для обычных пользователей
+        # Для обычных пользователей - ТОЛЬКО стандартное название тренинга
         cursor.execute('''
             SELECT 
                 COALESCE(uaa.arc_id, uaa.company_arc_id) as id,
-                CASE 
-                    WHEN uaa.arc_id IS NOT NULL THEN a.title
-                    ELSE c.name
-                END as title,
+                'Регулярный менеджмент(8 недель)' as title,  -- ★★★ ВСЕГДА одно название ★★★
                 CASE 
                     WHEN uaa.arc_id IS NOT NULL THEN a.дата_начала
                     ELSE ca.actual_start_date
@@ -3716,6 +3753,7 @@ def get_user_active_arcs(user_id):
             LEFT JOIN company_arcs ca ON uaa.company_arc_id = ca.company_arc_id
             LEFT JOIN companies c ON ca.company_id = c.company_id
             WHERE uaa.user_id = ?
+            AND (uaa.arc_id IS NOT NULL OR uaa.company_arc_id IS NOT NULL)
             AND (
                 (uaa.arc_id IS NOT NULL AND a.дата_начала IS NOT NULL AND a.дата_начала != '')
                 OR
@@ -3727,7 +3765,28 @@ def get_user_active_arcs(user_id):
     arcs = cursor.fetchall()
     conn.close()
     
-    return arcs
+    # ★★★ ДОПОЛНИТЕЛЬНАЯ ФИЛЬТРАЦИЯ ДЛЯ КОМПАНИЙ ★★★
+    # Убираем дубликаты компаний (если пользователь состоит в одной компании)
+    unique_arcs = []
+    seen_companies = set()
+    
+    for arc in arcs:
+        arc_id, title, start_date, end_date, access_type, arc_type = arc
+        
+        if arc_type == 'company':
+            # Для компаний проверяем уникальность по названию
+            if title not in seen_companies:
+                seen_companies.add(title)
+                unique_arcs.append(arc)
+            else:
+                print(f"⚠️  Пропущен дубликат компании: {title}")
+        else:
+            # Для обычных частей оставляем как есть
+            unique_arcs.append(arc)
+    
+    print(f"✅ get_user_active_arcs: найдено {len(arcs)} записей, после фильтрации {len(unique_arcs)}")
+    
+    return unique_arcs
 
 def save_assignment_answer_with_day_auto_approve(user_id, assignment_id, day_id, answer_text, answer_files):
     """Сохраняет ответ на задание с автоматическим принятием - ИСПРАВЛЕННАЯ"""
@@ -4324,36 +4383,64 @@ def get_tests_for_week(week_num):
     
     return tests
 
-def get_available_tests(user_id, arc_id):
-    """Возвращает доступные тесты для пользователя - НОВАЯ ЛОГИКА"""
+def get_available_tests(user_id, arc_or_company_id, is_company=False):
+    """Возвращает доступные тесты для пользователя - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # Получаем текущий день в марафоне
-    current_day_info = get_current_arc_day(user_id, arc_id)
-    current_day = current_day_info['day_number'] if current_day_info else 0
-    
-    print(f"🔍 DEBUG: user_id={user_id}, arc_id={arc_id}, current_day={current_day}")
-    
-    # ★★ НОВАЯ ЛОГИКА: тесты доступны в диапазонах дней ★★
-    available_weeks = []
-    
-    if 1 <= current_day <= 7:  # Дни 1-7
-        available_weeks.append(1)
-    if 8 <= current_day <= 14:  # Дни 8-14
-        available_weeks.append(2)
-    if 15 <= current_day <= 21:  # Дни 15-21
-        available_weeks.append(3)
-    if 22 <= current_day <= 28:  # Дни 22-28
-        available_weeks.append(4)
-    
-    # Проверяем какие тесты уже пройдены
-    cursor.execute('''
-        SELECT week_num FROM test_results 
-        WHERE user_id = ? AND arc_id = ?
-    ''', (user_id, arc_id))
+    # ★★★ РАЗДЕЛЯЕМ ЛОГИКУ ДЛЯ КОМПАНИЙ И ОБЫЧНЫХ АРК ★★★
+    if is_company:
+        # Для компаний используем company_arc_id
+        company_arc_id = arc_or_company_id
+        
+        # Получаем текущий день в компании
+        current_day_info = get_current_arc_day(user_id, company_arc_id)
+        current_day = current_day_info['day_number'] if current_day_info else 0
+        
+        print(f"🔍 DEBUG (компания): user_id={user_id}, company_arc_id={company_arc_id}, current_day={current_day}")
+        
+        # Проверяем какие тесты уже пройдены в компании
+        cursor.execute('''
+            SELECT week_num FROM test_results 
+            WHERE user_id = ? AND company_arc_id = ?
+        ''', (user_id, company_arc_id))
+        
+    else:
+        # Для обычных арк используем arc_id
+        arc_id = arc_or_company_id
+        
+        # Получаем текущий день в обычной арке
+        # Нужна функция get_current_arc_day для обычных арк или другой подход
+        current_day = get_current_day_for_arc(user_id, arc_id)  # Нужно создать эту функцию
+        
+        print(f"🔍 DEBUG (обычная арка): user_id={user_id}, arc_id={arc_id}, current_day={current_day}")
+        
+        # Проверяем какие тесты уже пройдены в обычной арке
+        cursor.execute('''
+            SELECT week_num FROM test_results 
+            WHERE user_id = ? AND arc_id = ?
+        ''', (user_id, arc_id))
     
     completed_weeks = [row[0] for row in cursor.fetchall()]
+    
+    # ★★★ ОБНОВЛЕННАЯ ЛОГИКА ДОСТУПНОСТИ ТЕСТОВ ★★★
+    # Тесты доступны с 1 недели, независимо от дня
+    # Но можно ограничить если тренинг еще не начался
+    
+    available_weeks = []
+    
+    if is_company:
+        # Для компаний проверяем начался ли тренинг
+        if current_day > 0:  # Тренинг начался
+            # Все 8 недель доступны, но можно ограничить по текущему дню
+            max_week = min(8, (current_day + 6) // 7)  # Неделя на основе текущего дня
+            available_weeks = list(range(1, max_week + 1))
+        else:
+            # Тренинг еще не начался
+            available_weeks = []
+    else:
+        # Для обычных арк - все 8 недель
+        available_weeks = list(range(1, 9))
     
     # Фильтруем доступные
     result = []
@@ -4369,16 +4456,52 @@ def get_available_tests(user_id, arc_id):
     print(f"🔍 DEBUG: доступные недели: {result}")
     return result
 
-def get_test_progress(user_id, arc_id, week_num):
-    """Получает прогресс теста (если прервали)"""
+def get_current_day_for_arc(user_id, arc_id):
+    """Получает текущий день для обычной арки (не компании)"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
+    # Получаем дату начала доступа
     cursor.execute('''
-        SELECT current_question, answers_json 
-        FROM test_progress 
-        WHERE user_id = ? AND arc_id = ? AND week_num = ?
-    ''', (user_id, arc_id, week_num))
+        SELECT purchased_at FROM user_arc_access 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
+    
+    result = cursor.fetchone()
+    
+    if result:
+        start_date_str = result[0]
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str).date()
+                today = datetime.now().date()
+                days_passed = (today - start_date).days + 1
+                return max(1, min(days_passed, 56))  # Ограничиваем 56 днями
+            except:
+                pass
+    
+    conn.close()
+    return 1
+
+def get_test_progress(user_id, arc_or_company_id, week_num, is_company=False):
+    """Получает прогресс теста (если прервали) - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    if is_company:
+        # Для компаний
+        cursor.execute('''
+            SELECT current_question, answers_json 
+            FROM test_progress 
+            WHERE user_id = ? AND company_arc_id = ? AND week_num = ?
+        ''', (user_id, arc_or_company_id, week_num))
+    else:
+        # Для обычных арк
+        cursor.execute('''
+            SELECT current_question, answers_json 
+            FROM test_progress 
+            WHERE user_id = ? AND arc_id = ? AND week_num = ?
+        ''', (user_id, arc_or_company_id, week_num))
     
     result = cursor.fetchone()
     conn.close()
@@ -4641,17 +4764,19 @@ def get_company_by_key(join_key):
     return None
 
 def get_user_company(user_id):
-    """Получает компанию пользователя"""
+    """Получает ТОЛЬКО ОДНУ активную компанию пользователя"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # Сначала пробуем через user_companies
+    # ★★★ Берем ТОЛЬКО активную компанию ★★★
     cursor.execute('''
         SELECT c.company_id, c.name, c.join_key, c.start_date, c.tg_group_link,
                c.admin_email, c.price, uc.joined_at
         FROM user_companies uc
         JOIN companies c ON uc.company_id = c.company_id
         WHERE uc.user_id = ? AND uc.is_active = 1
+        ORDER BY uc.joined_at DESC
+        LIMIT 1
     ''', (user_id,))
     
     result = cursor.fetchone()
@@ -5356,6 +5481,98 @@ def check_table_structure():
     conn.close()
 
 check_table_structure()
+
+def get_user_access_type(user_id, arc_or_company_arc_id):
+    """Получает тип доступа пользователя (trial/paid) или None если нет доступа - ИСПРАВЛЕННАЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # ★★★ ИСПРАВЛЕНИЕ: Проверяем ВСЕ варианты ★★★
+        
+        # 1. Сначала проверяем по company_arc_id (новая система)
+        if arc_or_company_arc_id >= 1000 or True:  # Всегда проверяем
+            cursor.execute('''
+                SELECT access_type FROM user_arc_access 
+                WHERE user_id = ? AND company_arc_id = ?
+            ''', (user_id, arc_or_company_arc_id))
+            
+            result = cursor.fetchone()
+            if result:
+                print(f"✅ Найден доступ по company_arc_id: {result[0]}")
+                return result[0]
+        
+        # 2. Если не нашли, проверяем по arc_id (старая система)
+        cursor.execute('''
+            SELECT access_type FROM user_arc_access 
+            WHERE user_id = ? AND arc_id = ?
+        ''', (user_id, arc_or_company_arc_id))
+        
+        result = cursor.fetchone()
+        if result:
+            print(f"✅ Найден доступ по arc_id: {result[0]}")
+            return result[0]
+        
+        # 3. Если все еще не нашли, проверяем ВСЕ доступы пользователя
+        cursor.execute('''
+            SELECT company_arc_id, arc_id, access_type 
+            FROM user_arc_access 
+            WHERE user_id = ?
+        ''', (user_id,))
+        
+        all_accesses = cursor.fetchall()
+        
+        if all_accesses:
+            print(f"⚠️  У пользователя есть доступы, но не к этой арке: {all_accesses}")
+            # Возвращаем первый найденный (для совместимости)
+            return all_accesses[0][2]
+        
+        print(f"❌ Нет доступа у пользователя {user_id} к арке {arc_or_company_arc_id}")
+        return None
+        
+    except Exception as e:
+        print(f"🚨 Ошибка получения типа доступа: {e}")
+        return None
+    finally:
+        conn.close()
+
+def is_trial_access_active(user_id, company_arc_id):
+    """Проверяет активен ли пробный доступ и возвращает дни до окончания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Ищем пробный доступ
+        cursor.execute('''
+            SELECT purchased_at FROM user_arc_access 
+            WHERE user_id = ? AND (company_arc_id = ? OR arc_id = 1) 
+            AND access_type = 'trial'
+            ORDER BY purchased_at DESC LIMIT 1
+        ''', (user_id, company_arc_id))
+        
+        trial_result = cursor.fetchone()
+        
+        if not trial_result or not trial_result[0]:
+            return False, 0  # Нет пробного доступа
+        
+        # Проверяем срок действия
+        from datetime import datetime, timedelta
+        
+        trial_start = datetime.fromisoformat(trial_result[0])
+        trial_end = trial_start + timedelta(days=3)
+        now = datetime.now()
+        
+        if now < trial_end:
+            days_left = (trial_end - now).days + 1
+            return True, days_left  # Активен, возвращаем дни
+        else:
+            return False, 0  # Истек
+    
+    except Exception as e:
+        print(f"🚨 Ошибка проверки пробного доступа: {e}")
+        return False, 0
+    finally:
+        conn.close()
 
 
 

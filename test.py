@@ -1,43 +1,45 @@
-# create_compatibility_tables.py
+# test_structure.py
 import sqlite3
 
-def create_user_company_access_table():
-    """Создает таблицу user_company_access для совместимости со старым кодом"""
-    print("🔧 Создание таблицы user_company_access для совместимости...")
-    
+def check_test_tables():
+    """Проверяем структуру таблиц тестов"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # 1. Проверяем существует ли таблица
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_company_access'")
-    if cursor.fetchone():
-        print("✅ Таблица user_company_access уже существует")
-        conn.close()
-        return
+    print("🔍 Проверка структуры таблиц тестов:")
     
-    # 2. Создаем таблицу
-    cursor.execute('''
-        CREATE TABLE user_company_access (
-            access_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            company_arc_id INTEGER NOT NULL,
-            purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id),
-            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
-        )
-    ''')
+    # 1. Таблица tests
+    print("\n1. Таблица tests:")
+    cursor.execute("PRAGMA table_info(tests)")
+    columns = cursor.fetchall()
+    for col in columns:
+        print(f"   - {col[1]} ({col[2]})")
     
-    # 3. Копируем данные из user_arc_access
-    cursor.execute('''
-        INSERT INTO user_company_access (user_id, company_arc_id, purchased_at)
-        SELECT user_id, company_arc_id, purchased_at
-        FROM user_arc_access
-        WHERE company_arc_id IS NOT NULL
-    ''')
+    # 2. Таблица test_results
+    print("\n2. Таблица test_results:")
+    cursor.execute("PRAGMA table_info(test_results)")
+    columns = cursor.fetchall()
+    for col in columns:
+        print(f"   - {col[1]} ({col[2]})")
     
-    conn.commit()
+    # 3. Таблица test_progress
+    print("\n3. Таблица test_progress:")
+    cursor.execute("PRAGMA table_info(test_progress)")
+    columns = cursor.fetchall()
+    for col in columns:
+        print(f"   - {col[1]} ({col[2]})")
     
+    # 4. Пример данных
+    print("\n4. Пример данных в tests:")
+    cursor.execute("SELECT week_num, COUNT(*) FROM tests GROUP BY week_num ORDER BY week_num")
+    weeks = cursor.fetchall()
+    for week, count in weeks:
+        print(f"   - Неделя {week}: {count} вопросов")
+    
+    conn.close()
+
+if __name__ == "__main__":
+    check_test_tables()
     cursor.execute("SELECT COUNT(*) FROM user_company_access")
     count = cursor.fetchone()[0]
     

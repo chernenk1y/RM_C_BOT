@@ -4144,3 +4144,255 @@ Traceback (most recent call last):
 telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
 2026-02-09 20:54:54,164 - __main__ - INFO - === Бот запущен с логированием платежей ===
 2026-02-09 20:55:05,047 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:28:17,736 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:28:28,591 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:29:25,322 - __main__ - ERROR - Exception while handling an update: Timed out
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_async\http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.READ_NUM_BYTES, timeout=timeout
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_backends\anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 565, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 1750, in my_assignments_menu
+    await update.message.reply_text(
+    ...<3 lines>...
+    )
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 2060, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 3107, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 1118, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_httpxrequest.py", line 296, in do_request
+    raise TimedOut from err
+telegram.error.TimedOut: Timed out
+2026-02-10 01:33:38,379 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:33:49,232 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:35:03,947 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:35:14,807 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:40:40,578 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:40:51,433 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:58:26,334 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 01:59:36,948 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:01:56,025 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-10 02:01:56,624 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=1, amount=10₽, yookassa=311c5f04-000f-5000-b000-1082c189783d
+2026-02-10 02:01:58,166 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-10 02:02:32,691 - database - INFO - Статус платежа компании 311c5f04-000f-5000-b000-1082c189783d обновлен на 'succeeded'
+2026-02-10 02:09:02,196 - __main__ - INFO - Начало покупки: user=8311749437, trial=True
+2026-02-10 02:34:11,564 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:34:22,445 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:34:58,962 - __main__ - INFO - Начало покупки: user=8311749437, trial=True
+2026-02-10 02:36:36,045 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:36:46,598 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:45:36,965 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:45:47,837 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:49:41,068 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:49:51,938 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:50:11,224 - __main__ - ERROR - Exception while handling an update: name 'company_name' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 566, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2010, in show_available_assignments
+    'company_name': company_name,
+                    ^^^^^^^^^^^^
+NameError: name 'company_name' is not defined. Did you mean: 'company_arc'?
+2026-02-10 02:54:08,534 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 02:54:19,398 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:04:24,097 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:04:31,766 - __main__ - ERROR - Exception while handling an update: cannot import name 'is_trial_access_active' from 'database' (C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py)
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 471, in handle_buttons
+    await show_training_catalog(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 8024, in show_training_catalog
+    from database import get_user_company, get_company_arc, get_user_access_type, is_trial_access_active
+ImportError: cannot import name 'is_trial_access_active' from 'database' (C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py)
+2026-02-10 03:04:34,956 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:05:17,266 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:05:27,813 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:11:09,456 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:11:20,031 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:17:17,827 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:17:28,696 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:23:29,428 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:23:34,857 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:23:45,718 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:35:25,858 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:35:36,412 - __main__ - ERROR - Exception while handling an update: unrecognized token: "#"
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 145, in start
+    user_company = get_user_company(user.id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4729, in get_user_company
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT c.company_id, c.name, c.join_key, c.start_date, c.tg_group_link,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        LIMIT 1  ★★★ ВАЖНО: ТОЛЬКО ОДНУ КОМПАНИЮ ★★★
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id,))
+    ^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: unrecognized token: "#"
+2026-02-10 03:35:36,733 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:36:40,198 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:36:50,760 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:37:47,206 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:37:58,069 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:54:58,520 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 03:55:09,379 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 04:18:51,598 - __main__ - INFO - === Бот запущен с логированием платежей ===
