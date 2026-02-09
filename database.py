@@ -143,22 +143,25 @@ def get_user_assignments_for_day(user_id, day_id):
     conn.close()
     return results
 
-def update_daily_stats(user_id, arc_id, day_id, completed_count):
-    """Обновляет статистику дня (пропуск/выполнение)"""
+def update_daily_stats(user_id, company_arc_id, day_id, completed_count):
+    """Обновляет статистику дня (пропуск/выполнение) - ИСПРАВЛЕННАЯ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    total_assignments = get_day_assignments_count(day_id)
-    is_skipped = completed_count < total_assignments / 2
-    
-    cursor.execute('''
-        INSERT OR REPLACE INTO user_daily_stats 
-        (user_id, arc_id, day_id, date, assignments_completed, is_skipped)
-        VALUES (?, ?, ?, DATE('now'), ?, ?)
-    ''', (user_id, arc_id, day_id, completed_count, is_skipped))
-    
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_daily_stats 
+            (user_id, company_arc_id, day_id, date, assignments_completed, is_skipped)
+            VALUES (?, ?, ?, DATE('now'), ?, 0)
+        ''', (user_id, company_arc_id, day_id, completed_count))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка обновления статистики: {e}")
+        return False
+    finally:
+        conn.close()
 
 def get_day_assignments_count(day_id):
     """Возвращает количество заданий в дне"""
@@ -382,7 +385,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_daily_stats (
             user_id INTEGER,
-            company_arc_id INTEGER,  -- ★ Связь с аркой компании
+            company_arc_id INTEGER NOT NULL,
             day_id INTEGER,
             date DATE,
             assignments_completed INTEGER DEFAULT 0,
@@ -390,7 +393,7 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (user_id),
             FOREIGN KEY (company_arc_id) REFERENCES company_arcs (company_arc_id),
             FOREIGN KEY (day_id) REFERENCES days (day_id),
-            PRIMARY KEY (user_id, day_id)
+            PRIMARY KEY (user_id, company_arc_id, day_id)
         )
     ''')
     print("✅ Таблица user_daily_stats создана/проверена")
@@ -487,7 +490,7 @@ def init_db():
         print("📦 Создаю стандартный 8-недельный тренинг (arc_id=1)...")
         cursor.execute('''
             INSERT INTO arcs (arc_id, course_id, title, order_num, price, дата_начала, дата_окончания)
-            VALUES (1, 1, 'Стандартный 8-недельный тренинг', 1, 0, '2026-01-01', '2026-12-31')
+            VALUES (1, 1, 'Регулярный менеджмент(8 недель)', 1, 0, '2026-01-01', '2026-12-31')
         ''')
         print("✅ Стандартный тренинг создан")
     
@@ -2240,7 +2243,7 @@ def reload_full_from_excel():
         return False
 
 def get_user_skip_statistics(user_id, company_arc_id):
-    """Статистика пользователя в компании"""
+    """Статистика пользователя в компании - ИСПРАВЛЕННАЯ СЕРИЯ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
@@ -2290,10 +2293,9 @@ def get_user_skip_statistics(user_id, company_arc_id):
     first_answer_result = cursor.fetchone()
     
     if not first_answer_result or not first_answer_result[0]:
-        # Если нет ответов, берем дату получения доступа
         cursor.execute('''
             SELECT MIN(purchased_at) 
-            FROM user_company_access 
+            FROM user_arc_access 
             WHERE user_id = ? AND company_arc_id = ?
         ''', (user_id, company_arc_id))
         first_access_result = cursor.fetchone()
@@ -2313,18 +2315,19 @@ def get_user_skip_statistics(user_id, company_arc_id):
     
     # 4. Выполненные задания (approved) в этой компании
     cursor.execute('''
-        SELECT a.assignment_id, a.title, d.title as day_title, d.order_num
+        SELECT a.assignment_id, a.title, d.title as day_title, d.order_num, 
+               DATE(upa.submitted_at) as completion_date
         FROM user_progress_advanced upa
         JOIN assignments a ON upa.assignment_id = a.assignment_id
         JOIN days d ON a.day_id = d.day_id
         WHERE upa.user_id = ? AND d.arc_id = 1 
         AND upa.status = 'approved'
+        ORDER BY upa.submitted_at
     ''', (user_id,))
     
     completed_assignments_data = cursor.fetchall()
     completed_assignments = len(completed_assignments_data)
     completed_ids = {row[0] for row in completed_assignments_data}
-    completed_days = {row[3] for row in completed_assignments_data}
     
     # 5. Задания на проверке (submitted)
     cursor.execute('''
@@ -2381,19 +2384,72 @@ def get_user_skip_statistics(user_id, company_arc_id):
     if total_assignments > 0:
         completion_rate = round((completed_assignments / total_assignments) * 100)
     
-    # 9. СЕРИЯ БЕЗ ПРОПУСКОВ
-    max_streak = 0
-    current_streak = 0
-    last_day = -1
+    # ★★★ 9. ИСПРАВЛЕННАЯ СЕРИЯ БЕЗ ПРОПУСКОВ ★★★
+    # Собираем УНИКАЛЬНЫЕ даты выполнения заданий
+    unique_dates = set()
+    for row in completed_assignments_data:
+        completion_date = row[4]
+        if completion_date:
+            if isinstance(completion_date, str):
+                unique_dates.add(datetime.strptime(completion_date, '%Y-%m-%d').date())
+            else:
+                unique_dates.add(completion_date)
     
-    for day_order in sorted(completed_days):
-        if day_order == last_day + 1:
-            current_streak += 1
-        else:
-            current_streak = 1
+    # Преобразуем в отсортированный список
+    sorted_dates = sorted(unique_dates)
+    
+    # Рассчитываем текущую серию и максимальную серию
+    current_streak = 0
+    max_streak = 0
+    best_streak_dates = []  # Для отладки
+    
+    if sorted_dates:
+        # Начинаем с последней даты
+        today = datetime.now().date()
+        last_date = sorted_dates[-1]
         
-        max_streak = max(max_streak, current_streak)
-        last_day = day_order
+        # Проверяем текущую серию (последние дни подряд)
+        current_streak = 1
+        check_date = last_date
+        streak_dates = [check_date]
+        
+        while True:
+            check_date = check_date - timedelta(days=1)
+            if check_date in sorted_dates:
+                current_streak += 1
+                streak_dates.append(check_date)
+            else:
+                break
+        
+        # Рассчитываем максимальную серию за все время
+        temp_streak = 1
+        temp_max_streak = 1
+        temp_best_dates = [sorted_dates[0]]
+        
+        for i in range(1, len(sorted_dates)):
+            prev_date = sorted_dates[i-1]
+            curr_date = sorted_dates[i]
+            
+            # Если даты идут подряд (разница 1 день)
+            if (curr_date - prev_date).days == 1:
+                temp_streak += 1
+                temp_best_dates.append(curr_date)
+            else:
+                # Обновляем максимальную серию если нужно
+                if temp_streak > temp_max_streak:
+                    temp_max_streak = temp_streak
+                    best_streak_dates = temp_best_dates.copy()
+                
+                # Начинаем новую серию
+                temp_streak = 1
+                temp_best_dates = [curr_date]
+        
+        # Проверяем последнюю серию
+        if temp_streak > temp_max_streak:
+            temp_max_streak = temp_streak
+            best_streak_dates = temp_best_dates.copy()
+        
+        max_streak = temp_max_streak
     
     # 10. Текущий день арки компании
     current_day_info = get_current_arc_day(user_id, company_arc_id)
@@ -2411,10 +2467,15 @@ def get_user_skip_statistics(user_id, company_arc_id):
         'remaining_assignments': total_assignments - completed_assignments - submitted_assignments - skipped_assignments,
         'skipped_list': skipped_list[:10],
         'start_date': user_start_date,
-        'streak_days': max_streak,
+        'streak_days': current_streak,  # ★★★ ИЗМЕНЕНИЕ: Возвращаем ТЕКУЩУЮ серию ★★★
+        'max_streak_days': max_streak,  # ★★★ ДОБАВЛЕНО: Максимальная серия за все время ★★★
         'current_day': current_day,
         'company_arc_id': company_arc_id,
-        'actual_start_date': actual_start_date
+        'actual_start_date': actual_start_date,
+        'last_completion_date': sorted_dates[-1] if sorted_dates else None,  # Для отладки
+        'completion_dates_count': len(sorted_dates),  # Для отладки
+        'best_streak_start': best_streak_dates[0] if best_streak_dates else None,  # Для отладки
+        'best_streak_end': best_streak_dates[-1] if best_streak_dates else None  # Для отладки
     }
 
 def check_and_notify_skipped_days(user_id, arc_id):
@@ -3669,17 +3730,18 @@ def get_user_active_arcs(user_id):
     return arcs
 
 def save_assignment_answer_with_day_auto_approve(user_id, assignment_id, day_id, answer_text, answer_files):
-    """Сохраняет ответ на задание с автоматическим принятием"""
+    """Сохраняет ответ на задание с автоматическим принятием - ИСПРАВЛЕННАЯ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     # Сохраняем файлы как JSON
+    import json
     files_json = json.dumps(answer_files) if answer_files else None
     
     # Автоматический комментарий психолога
     auto_comment = "✅ Задание принято автоматически."
     
-    # ★★ ИЗМЕНЕНИЕ: Сохраняем с флагами для автоматического комментария
+    # Сохраняем ответ
     cursor.execute('''
         INSERT OR REPLACE INTO user_progress_advanced 
         (user_id, assignment_id, answer_text, answer_files, status, teacher_comment, 
@@ -3687,18 +3749,36 @@ def save_assignment_answer_with_day_auto_approve(user_id, assignment_id, day_id,
         VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)
     ''', (user_id, assignment_id, answer_text, files_json, 'approved', auto_comment))
     
-    # Обновляем статистику дня если есть day_id
+    # ★★★ ИСПРАВЛЕНИЕ: Обновляем статистику дня с company_arc_id вместо arc_id ★★★
     if day_id:
         try:
+            # Получаем company_arc_id пользователя
             cursor.execute('''
-                INSERT OR REPLACE INTO user_daily_stats 
-                (user_id, arc_id, day_id, date, assignments_completed, is_skipped)
-                VALUES (?, 
-                       (SELECT d.arc_id FROM days d JOIN assignments a ON d.day_id = a.day_id WHERE a.assignment_id = ?),
-                       ?, DATE('now'), 1, 0)
-            ''', (user_id, assignment_id, day_id))
+                SELECT ua.company_arc_id 
+                FROM user_arc_access ua
+                JOIN users u ON ua.user_id = u.user_id
+                JOIN user_companies uc ON u.user_id = uc.user_id
+                WHERE ua.user_id = ? AND ua.company_arc_id IS NOT NULL
+                LIMIT 1
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                company_arc_id = result[0]
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO user_daily_stats 
+                    (user_id, company_arc_id, day_id, date, assignments_completed, is_skipped)
+                    VALUES (?, ?, ?, DATE('now'), 1, 0)
+                ''', (user_id, company_arc_id, day_id))
+                
+                print(f"✅ Статистика дня обновлена: user={user_id}, company_arc={company_arc_id}, day={day_id}")
+            else:
+                print(f"⚠️  Не найден company_arc_id для пользователя {user_id}")
+                
         except Exception as e:
-            print(f"⚠️ Ошибка обновления статистики дня: {e}")
+            print(f"⚠️  Ошибка обновления статистики дня: {e}")
     
     conn.commit()
     conn.close()
@@ -3743,23 +3823,28 @@ def get_assignment_media(assignment_id):
     conn.close()
     
     if result:
-        photos_json, audios_json, video_url = result
+        photos_str, audios_str, video_url = result
         
-        # Парсим JSON
+        # Парсим JSON строки
+        import json
         photos = []
         audios = []
         
-        if photos_json:
+        if photos_str:
             try:
-                photos = json.loads(photos_json)
+                photos = json.loads(photos_str)
+                if not isinstance(photos, list):
+                    photos = [photos]
             except:
-                photos = []
+                photos = [photos_str] if photos_str else []
         
-        if audios_json:
+        if audios_str:
             try:
-                audios = json.loads(audios_json)
+                audios = json.loads(audios_str)
+                if not isinstance(audios, list):
+                    audios = [audios]
             except:
-                audios = []
+                audios = [audios_str] if audios_str else []
         
         return {
             'photos': photos,
@@ -3767,11 +3852,7 @@ def get_assignment_media(assignment_id):
             'video_url': video_url
         }
     
-    return {
-        'photos': [],
-        'audios': [],
-        'video_url': None
-    }
+    return {'photos': [], 'audios': [], 'video_url': None}
 
 def update_assignment_with_media_simple(file_path='courses_data.xlsx'):
     """Простая загрузка медиа с отладкой"""
@@ -4730,23 +4811,65 @@ def get_company_arc(company_id):
     return None
 
 def check_user_company_access(user_id):
-    """Проверяет доступ пользователя к любой компании - ИСПРАВЛЕННАЯ"""
+    """Проверяет доступ пользователя к ЛЮБОЙ компании - ИСПРАВЛЕННАЯ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     try:
-        # Проверяем наличие доступа к ЛЮБОЙ компании
+        # 1. Проверяем наличие компании у пользователя
         cursor.execute('''
-            SELECT 1 FROM user_arc_access 
-            WHERE user_id = ? AND company_arc_id IS NOT NULL
+            SELECT uc.company_id
+            FROM user_companies uc
+            WHERE uc.user_id = ? AND uc.is_active = 1
         ''', (user_id,))
         
-        result = cursor.fetchone()
+        company = cursor.fetchone()
         
-        if result:
-            return True, "Есть доступ к компании"
+        if not company:
+            return False, "Пользователь не состоит в компании"
+        
+        company_id = company[0]
+        
+        # 2. Получаем активную арку компании
+        cursor.execute('''
+            SELECT ca.company_arc_id
+            FROM company_arcs ca
+            WHERE ca.company_id = ? AND ca.status = 'active'
+        ''', (company_id,))
+        
+        company_arc = cursor.fetchone()
+        
+        if not company_arc:
+            return False, "У компании нет активного тренинга"
+        
+        company_arc_id = company_arc[0]
+        
+        # 3. Проверяем наличие доступа пользователя к этой арке
+        cursor.execute('''
+            SELECT 1 FROM user_arc_access 
+            WHERE user_id = ? AND company_arc_id = ?
+        ''', (user_id, company_arc_id))
+        
+        if cursor.fetchone():
+            return True, f"Есть доступ к тренингу компании (арка {company_arc_id})"
         else:
-            return False, "Нет доступа к компании"
+            # Проверяем старый доступ (для совместимости)
+            cursor.execute('''
+                SELECT 1 FROM user_arc_access 
+                WHERE user_id = ? AND arc_id = 1
+            ''', (user_id,))
+            
+            if cursor.fetchone():
+                # Автоматически конвертируем старый доступ в новый
+                cursor.execute('''
+                    INSERT OR REPLACE INTO user_arc_access 
+                    (user_id, company_arc_id, access_type)
+                    VALUES (?, ?, 'paid')
+                ''', (user_id, company_arc_id))
+                conn.commit()
+                return True, f"Старый доступ конвертирован в новый (арка {company_arc_id})"
+            else:
+                return False, f"Нет доступа к тренингу компании (арка {company_arc_id})"
         
     except Exception as e:
         print(f"🚨 Ошибка проверки доступа к компании: {e}")
@@ -5188,6 +5311,51 @@ def test_callback_with_real_payment(payment_id):
         print(f"❌ Ошибка при тесте callback: {e}")
         import traceback
         traceback.print_exc()
+
+def check_assignment_status(user_id, assignment_id):
+    """Проверяет статус задания для пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT status FROM user_progress_advanced 
+        WHERE user_id = ? AND assignment_id = ?
+    ''', (user_id, assignment_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else 'new'
+
+def check_table_structure():
+    """Проверяем структуру таблиц"""
+    import sqlite3
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    print("🔍 Проверка структуры таблицы user_daily_stats:")
+    
+    try:
+        cursor.execute("PRAGMA table_info(user_daily_stats)")
+        columns = cursor.fetchall()
+        
+        print(f"Колонок: {len(columns)}")
+        for col in columns:
+            print(f"  - {col[1]} ({col[2]})")
+        
+        # Проверяем наличие нужных колонок
+        column_names = [col[1] for col in columns]
+        print(f"\nНаличие колонок:")
+        print(f"  company_arc_id: {'✅' if 'company_arc_id' in column_names else '❌'}")
+        print(f"  arc_id: {'✅' if 'arc_id' in column_names else '❌'}")
+        
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+    
+    conn.close()
+
+check_table_structure()
 
 
 
