@@ -4584,3 +4584,77 @@ Traceback (most recent call last):
 KeyError: 'arc_id'
 2026-02-10 09:47:35,171 - __main__ - INFO - === Бот запущен с логированием платежей ===
 2026-02-10 09:47:46,036 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:47:54,200 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 10:00:06,544 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:00:17,092 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:00:41,575 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 10:25:34,002 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:25:44,855 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:25:47,985 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 10:31:59,585 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:32:10,454 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:32:17,284 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 10:33:37,753 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:33:48,613 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 10:33:55,496 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 793, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2721, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 10:35:16,026 - __main__ - INFO - === Бот запущен с логированием платежей ===

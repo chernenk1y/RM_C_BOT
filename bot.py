@@ -200,6 +200,19 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.message.from_user.id
 
+    if text.startswith("📊 Неделя") and 'test_results_mapping' in context.user_data and text in context.user_data['test_results_mapping']:
+        print(f"🔍 Обрабатываю кнопку результата теста: {text}")
+        
+        test_info = context.user_data['test_results_mapping'][text]
+        week_num = test_info['week_num']
+        user_id = update.message.from_user.id
+        
+        print(f"🔍 Вызываю show_test_results с week_num={week_num}")
+        
+        # ★★★ ВЫЗЫВАЕМ show_test_results С week_num
+        await show_test_results(update, context, user_id, week_num)
+        return
+
     print(f"🔍 Кнопка нажата: '{text}'")
 
     # ★★★ НОВЫЕ КНОПКИ ДЛЯ КОМПАНИЙ ★★★
@@ -11175,96 +11188,105 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_test_results(update, context, user_id, week_num)
 
 async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id=None, week_num=None):
-    """Показывает результаты теста - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
-    if user_id is None:
-        user_id = update.message.from_user.id
+    """Показывает результаты теста - С ДОБАВЛЕННОЙ ОТЛАДКОЙ"""
+    print(f"🔍 DEBUG show_test_results ВЫЗВАНА")
+    print(f"🔍 user_id={user_id}, week_num={week_num}")
+    print(f"🔍 update.message.text='{update.message.text}'")
     
-    # ★★★ УПРОЩАЕМ: Если передан week_num, показываем конкретный тест
-    if week_num:
-        from database import get_test_result, get_tests_for_week
-        result_data = get_test_result(user_id, week_num)
+    try:
+        if user_id is None:
+            user_id = update.message.from_user.id
         
-        if not result_data:
-            await update.message.reply_text("❌ Результаты теста не найдены")
+        # ★★★ УПРОЩАЕМ: Если передан week_num, показываем конкретный тест
+        if week_num:
+            print(f"🔍 Показываем конкретный тест week_num={week_num}")
+            from database import get_test_result, get_tests_for_week
+            result_data = get_test_result(user_id, week_num)
+            
+            if not result_data:
+                await update.message.reply_text("❌ Результаты теста не найдены")
+                return
+            
+            # ★★★ ВСЕГДА arc_title = константа
+            arc_title = "8-недельный тренинг"
+            
+            score = result_data['score']
+            answers = result_data['answers']
+            
+            # Получаем вопросы теста для деталей
+            questions = get_tests_for_week(week_num)
+            question_map = {str(q[0]): q for q in questions}
+            
+            print(f"🔍 Вызываю show_test_result_details с arc_title={arc_title}")
+            
+            # ★★★ ВЫЗОВ БЕЗ arc_id
+            await show_test_result_details(update, context, arc_title, week_num, score, answers, question_map)
             return
         
-        # ★★★ ВСЕГДА arc_id = 1 (но теперь не передаем его)
-        arc_title = "8-недельный тренинг"  # Константа
+        # ★★★ УПРОЩАЕМ: Показываем все результаты пользователя
+        print(f"🔍 Показываем все результаты")
+        from database import get_all_test_results
+        results = get_all_test_results(user_id)
         
-        score = result_data['score']
-        answers = result_data['answers']
+        print(f"🔍 Найдено результатов: {len(results) if results else 0}")
         
-        # Получаем вопросы теста для деталей
-        questions = get_tests_for_week(week_num)
-        question_map = {str(q[0]): q for q in questions}  # test_id -> question data
+        if not results:
+            await update.message.reply_text(
+                "📭 **Результаты тестов отсутствуют**\n\n"
+                "Вы еще не проходили тесты.",
+                parse_mode='Markdown'
+            )
+            return
         
-        # ★★★ ИСПРАВЛЕНИЕ: передаем без arc_id
-        await show_test_result_details(update, context, arc_title, week_num, score, answers, question_map)
-        return
-    
-    # ★★★ УПРОЩАЕМ: Показываем все результаты пользователя
-    from database import get_all_test_results
-    results = get_all_test_results(user_id)
-    
-    if not results:
+        # ★★★ УПРОЩАЕМ: Только один марафон - 8-недельный тренинг
+        # Показываем сразу все результаты
+        arc_title = "8-недельный тренинг"
+        keyboard = []
+        
+        for result_id, res_week_num, score, completed_at in results:
+            date_str = completed_at[:10] if completed_at else "??"
+            btn_text = f"📊 Неделя {res_week_num} ({score}%) - {date_str}"
+            keyboard.append([btn_text])
+            
+            # Сохраняем маппинг
+            if 'test_results_mapping' not in context.user_data:
+                context.user_data['test_results_mapping'] = {}
+            context.user_data['test_results_mapping'][btn_text] = {
+                'week_num': res_week_num
+            }
+        
+        print(f"🔍 Создано кнопок: {len(keyboard)}")
+        print(f"🔍 mapping сохранен")
+        
+        keyboard.append(["🔙 Назад к тестированию"])
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
         await update.message.reply_text(
-            "📭 **Результаты тестов отсутствуют**\n\n"
-            "Вы еще не проходили тесты.",
+            f"📊 **ВАШИ РЕЗУЛЬТАТЫ ТЕСТОВ**\n\n"
+            f"🏁 **Тренинг:** {arc_title}\n"
+            f"📈 **Всего пройдено тестов:** {len(results)}\n\n"
+            f"Выберите тест для просмотра деталей:",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
-        return
-    
-    # ★★★ УПРОЩАЕМ: Только один марафон - 8-недельный тренинг
-    # Показываем сразу все результаты
-    arc_title = "8-недельный тренинг"
-    keyboard = []
-    
-    for result_id, res_week_num, score, completed_at in results:
-        date_str = completed_at[:10] if completed_at else "??"
-        btn_text = f"📊 Неделя {res_week_num} ({score}%) - {date_str}"
-        keyboard.append([btn_text])
         
-        # Сохраняем маппинг
-        if 'test_results_mapping' not in context.user_data:
-            context.user_data['test_results_mapping'] = {}
-        context.user_data['test_results_mapping'][btn_text] = {
-            'week_num': res_week_num
-        }
-    
-    keyboard.append(["🔙 Назад к тестированию"])
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        f"📊 **ВАШИ РЕЗУЛЬТАТЫ ТЕСТОВ**\n\n"
-        f"🏁 **Тренинг:** {arc_title}\n"
-        f"📈 **Всего пройдено тестов:** {len(results)}\n\n"
-        f"Выберите тест для просмотра деталей:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
+    except Exception as e:
+        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА в show_test_results: {e}")
+        import traceback
+        traceback.print_exc()
+        await update.message.reply_text(f"❌ Ошибка загрузки результатов: {str(e)}")
 
 async def show_tests_for_arc_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает тесты выбранного марафона для просмотра результатов - УПРОЩЕННАЯ"""
-    # ★★★ УПРОЩАЕМ: эта функция почти не нужна, но оставляем для обработки кнопок
+    """Показывает тесты выбранного марафона для просмотра результатов - ПЕРЕНАПРАВЛЕНИЕ"""
+    print(f"🔍 show_tests_for_arc_results ВЫЗВАНА - ПЕРЕНАПРАВЛЯЮ")
     
+    # ★★★ ПРОСТО ПЕРЕНАПРАВЛЯЕМ НА show_test_results
     user_id = update.message.from_user.id
-    
-    # Если нажали на результат из mapping
-    text = update.message.text
-    if 'test_results_mapping' in context.user_data and text in context.user_data['test_results_mapping']:
-        test_info = context.user_data['test_results_mapping'][text]
-        week_num = test_info['week_num']
-        
-        # Показываем результат теста
-        await show_test_results(update, context, user_id, week_num)
-        return
-    
-    # Иначе показываем все результаты
     await show_test_results(update, context, user_id)
 
 async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                    arc_title, week_num, score, answers, question_map):
-    """Показывает детали результатов теста - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
+    """Показывает детали результатов теста - ИСПРАВЛЕННАЯ (без arc_id)"""
     total_questions = len(question_map)
     correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
     
@@ -11327,7 +11349,7 @@ async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT
         ["📈 Пройти другой тест"]
     ]
     
-    # ★★★ ИСПРАВЛЕНИЕ: сохраняем только week_num и arc_title (arc_id не нужен)
+    # ★★★ ИСПРАВЛЕНИЕ: сохраняем ТОЛЬКО данные теста
     context.user_data['current_test_details'] = {
         'arc_title': arc_title,
         'week_num': week_num,
@@ -11335,6 +11357,8 @@ async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT
         'answers': answers,
         'question_map': question_map
     }
+    
+    # ★★★ ВАЖНО: НИКАКИХ arc_id здесь быть не должно!
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
