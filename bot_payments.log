@@ -4396,3 +4396,191 @@ sqlite3.OperationalError: unrecognized token: "#"
 2026-02-10 03:54:58,520 - __main__ - INFO - === Бот запущен с логированием платежей ===
 2026-02-10 03:55:09,379 - bot - INFO - === Бот запущен с логированием платежей ===
 2026-02-10 04:18:51,598 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 08:40:04,317 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 08:40:15,184 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 08:42:08,418 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 08:44:37,243 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 08:46:47,848 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 08:50:41,088 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-10 08:50:41,781 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=1, amount=10₽, yookassa=311cbed2-000f-5000-8000-1baeafa9d0bb
+2026-02-10 08:50:42,806 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-10 08:51:50,141 - database - INFO - Статус платежа компании 311cbed2-000f-5000-8000-1baeafa9d0bb обновлен на 'succeeded'
+2026-02-10 08:54:09,206 - __main__ - ERROR - Exception while handling an update: get_test_progress() takes 2 positional arguments but 3 were given
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 302, in handle_buttons
+    await start_test(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10859, in start_test
+    progress = get_test_progress(user_id, arc_id, week_num)
+TypeError: get_test_progress() takes 2 positional arguments but 3 were given
+2026-02-10 09:11:11,420 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:11:22,280 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:11:30,230 - __main__ - ERROR - Exception while handling an update: no such column: arc_id
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 302, in handle_buttons
+    await start_test(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10859, in start_test
+    progress = get_test_progress(user_id, week_num)  # Было get_test_progress(user_id, arc_id, week_num)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 4518, in get_test_progress
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT current_question, answers_json
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        FROM test_progress
+        ^^^^^^^^^^^^^^^^^^
+        WHERE user_id = ? AND arc_id = 1 AND week_num = ?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', (user_id, week_num))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: arc_id
+2026-02-10 09:24:40,820 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:24:51,374 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:24:58,040 - __main__ - ERROR - Exception while handling an update: 'current_question'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 302, in handle_buttons
+    await start_test(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10901, in start_test
+    await show_question(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10911, in show_question
+    question_num = test_data['current_question']
+                   ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'current_question'
+2026-02-10 09:31:42,808 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:31:53,360 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:32:12,005 - __main__ - ERROR - Exception while handling an update: 'current_question'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 302, in handle_buttons
+    await start_test(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10901, in start_test
+    await show_question(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 10911, in show_question
+    question_num = test_data['current_question']
+                   ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'current_question'
+2026-02-10 09:39:46,573 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:39:57,434 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:41:29,774 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 09:41:52,569 - __main__ - ERROR - Exception while handling an update: Can't parse entities: can't find end of the entity starting at byte offset 53
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 11894, in debug_test_data
+    await update.message.reply_text(message, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 2060, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 3107, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 1118, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Can't parse entities: can't find end of the entity starting at byte offset 53
+2026-02-10 09:43:58,675 - __main__ - ERROR - Exception while handling an update: 'arc_id'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 780, in handle_buttons
+    await handle_text(update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 2708, in handle_text
+    test_info['arc_id'],
+    ~~~~~~~~~^^^^^^^^^^
+KeyError: 'arc_id'
+2026-02-10 09:47:35,171 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-10 09:47:46,036 - bot - INFO - === Бот запущен с логированием платежей ===

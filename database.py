@@ -247,6 +247,40 @@ def init_db():
         )
     ''')
     print("✅ Таблица company_arcs создана/проверена")
+
+    # ★★★ ПРОВЕРЯЕМ И СОЗДАЕМ company_arc_id = 1 ★★★
+    try:
+        # Проверяем есть ли запись с company_arc_id = 1
+        cursor.execute('SELECT 1 FROM company_arcs WHERE company_arc_id = 1')
+        if not cursor.fetchone():
+            print("🔧 Создаем company_arc_id = 1...")
+            
+            # Сначала проверяем есть ли компания с ID = 1
+            cursor.execute('SELECT 1 FROM companies WHERE company_id = 1')
+            if not cursor.fetchone():
+                # Создаем тестовую компанию
+                cursor.execute('''
+                    INSERT INTO companies 
+                    (company_id, name, join_key, start_date, price)
+                    VALUES (1, 'Тестовая Компания', 'TESTKEY', '2026-02-01', 1000)
+                ''')
+                print("✅ Тестовая компания создана")
+            
+            # Создаем company_arc с ID = 1
+            cursor.execute('''
+                INSERT INTO company_arcs 
+                (company_arc_id, company_id, arc_id, actual_start_date, actual_end_date)
+                VALUES (1, 1, 1, '2026-02-01', '2026-04-01')
+            ''')
+            print("✅ company_arc_id = 1 создан")
+            
+            conn.commit()
+        else:
+            print("✅ company_arc_id = 1 уже существует")
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка создания company_arc_id = 1: {e}")
+        conn.rollback()
     
     # ★★★ ПОЛЬЗОВАТЕЛИ ★★★
     
@@ -467,6 +501,45 @@ def init_db():
         )
     ''')
     print("✅ Таблица test_results создана/проверена")
+
+    # Обновляем существующую таблицу test_results для обратной совместимости
+    try:
+        cursor.execute("PRAGMA table_info(test_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        # Добавляем arc_id если его нет
+        if 'arc_id' not in columns:
+            print("🔧 Добавляем arc_id в test_results...")
+            cursor.execute('''
+                CREATE TABLE test_results_new (
+                    result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    arc_id INTEGER DEFAULT 1,
+                    company_arc_id INTEGER,
+                    week_num INTEGER NOT NULL,
+                    score INTEGER,
+                    answers_json TEXT NOT NULL,
+                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id)
+                )
+            ''')
+            
+            # Копируем данные
+            cursor.execute('''
+                INSERT INTO test_results_new 
+                (result_id, user_id, company_arc_id, week_num, score, answers_json, completed_at)
+                SELECT result_id, user_id, company_arc_id, week_num, score, answers_json, completed_at
+                FROM test_results
+            ''')
+            
+            cursor.execute("DROP TABLE test_results")
+            cursor.execute("ALTER TABLE test_results_new RENAME TO test_results")
+            print("✅ Таблица test_results обновлена")
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка обновления test_results: {e}")
+        conn.rollback()
     
     # Прогресс тестов
     cursor.execute('''
@@ -4383,64 +4456,52 @@ def get_tests_for_week(week_num):
     
     return tests
 
-def get_available_tests(user_id, arc_or_company_id, is_company=False):
-    """Возвращает доступные тесты для пользователя - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+def get_available_tests(user_id, arc_or_company_id=None, is_company=False):
+    """Возвращает доступные тесты для пользователя - УПРОЩЕННАЯ ВЕРСИЯ ДЛЯ КОМПАНИЙ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # ★★★ РАЗДЕЛЯЕМ ЛОГИКУ ДЛЯ КОМПАНИЙ И ОБЫЧНЫХ АРК ★★★
-    if is_company:
-        # Для компаний используем company_arc_id
-        company_arc_id = arc_or_company_id
-        
-        # Получаем текущий день в компании
-        current_day_info = get_current_arc_day(user_id, company_arc_id)
-        current_day = current_day_info['day_number'] if current_day_info else 0
-        
-        print(f"🔍 DEBUG (компания): user_id={user_id}, company_arc_id={company_arc_id}, current_day={current_day}")
-        
-        # Проверяем какие тесты уже пройдены в компании
-        cursor.execute('''
-            SELECT week_num FROM test_results 
-            WHERE user_id = ? AND company_arc_id = ?
-        ''', (user_id, company_arc_id))
-        
-    else:
-        # Для обычных арк используем arc_id
-        arc_id = arc_or_company_id
-        
-        # Получаем текущий день в обычной арке
-        # Нужна функция get_current_arc_day для обычных арк или другой подход
-        current_day = get_current_day_for_arc(user_id, arc_id)  # Нужно создать эту функцию
-        
-        print(f"🔍 DEBUG (обычная арка): user_id={user_id}, arc_id={arc_id}, current_day={current_day}")
-        
-        # Проверяем какие тесты уже пройдены в обычной арке
-        cursor.execute('''
-            SELECT week_num FROM test_results 
-            WHERE user_id = ? AND arc_id = ?
-        ''', (user_id, arc_id))
+    # ★★★ ВСЕГДА РАБОТАЕМ С arc_id = 1 (стандартный тренинг) ★★★
+    arc_id = 1
+    
+    print(f"🔍 DEBUG тесты: user_id={user_id}, всегда используем arc_id={arc_id}")
+    
+    # Проверяем какие тесты уже пройдены
+    cursor.execute('''
+        SELECT week_num FROM test_results 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
     
     completed_weeks = [row[0] for row in cursor.fetchall()]
     
-    # ★★★ ОБНОВЛЕННАЯ ЛОГИКА ДОСТУПНОСТИ ТЕСТОВ ★★★
-    # Тесты доступны с 1 недели, независимо от дня
-    # Но можно ограничить если тренинг еще не начался
+    # ★★★ ОПРЕДЕЛЯЕМ ДОСТУПНЫЕ НЕДЕЛИ ★★★
+    # Для работы с компаниями - проверяем есть ли доступ у пользователя к любой компании
+    from database import check_user_company_access, get_user_company
+    has_company_access, _ = check_user_company_access(user_id)
     
+    if not has_company_access:
+        conn.close()
+        return []  # Нет доступа к компании - нет тестов
+    
+    # ★★★ Получаем текущий день пользователя в стандартном тренинге ★★★
+    # Используем существующую логику
+    cursor.execute('''
+        SELECT MAX(day_id) 
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        WHERE upa.user_id = ? AND upa.status = 'approved'
+    ''', (user_id,))
+    
+    max_day_result = cursor.fetchone()
+    current_day = max_day_result[0] if max_day_result and max_day_result[0] else 0
+    
+    # Определяем доступные недели на основе текущего дня
     available_weeks = []
-    
-    if is_company:
-        # Для компаний проверяем начался ли тренинг
-        if current_day > 0:  # Тренинг начался
-            # Все 8 недель доступны, но можно ограничить по текущему дню
-            max_week = min(8, (current_day + 6) // 7)  # Неделя на основе текущего дня
-            available_weeks = list(range(1, max_week + 1))
-        else:
-            # Тренинг еще не начался
-            available_weeks = []
-    else:
-        # Для обычных арк - все 8 недель
-        available_weeks = list(range(1, 9))
+    if current_day > 0:
+        # Недели доступны постепенно: неделя 1 с 1 дня, неделя 2 с 8 дня и т.д.
+        for week_num in range(1, 9):
+            if current_day >= ((week_num - 1) * 7 + 1):
+                available_weeks.append(week_num)
     
     # Фильтруем доступные
     result = []
@@ -4453,7 +4514,7 @@ def get_available_tests(user_id, arc_or_company_id, is_company=False):
         })
     
     conn.close()
-    print(f"🔍 DEBUG: доступные недели: {result}")
+    print(f"🔍 DEBUG тесты: текущий день={current_day}, доступные недели={available_weeks}")
     return result
 
 def get_current_day_for_arc(user_id, arc_id):
@@ -4483,25 +4544,16 @@ def get_current_day_for_arc(user_id, arc_id):
     conn.close()
     return 1
 
-def get_test_progress(user_id, arc_or_company_id, week_num, is_company=False):
-    """Получает прогресс теста (если прервали) - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+def get_test_progress(user_id, week_num):
+    """Получает прогресс теста - РАБОТАЕТ С company_arc_id"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    if is_company:
-        # Для компаний
-        cursor.execute('''
-            SELECT current_question, answers_json 
-            FROM test_progress 
-            WHERE user_id = ? AND company_arc_id = ? AND week_num = ?
-        ''', (user_id, arc_or_company_id, week_num))
-    else:
-        # Для обычных арк
-        cursor.execute('''
-            SELECT current_question, answers_json 
-            FROM test_progress 
-            WHERE user_id = ? AND arc_id = ? AND week_num = ?
-        ''', (user_id, arc_or_company_id, week_num))
+    cursor.execute('''
+        SELECT current_question, answers_json 
+        FROM test_progress 
+        WHERE user_id = ? AND company_arc_id = 1 AND week_num = ?
+    ''', (user_id, week_num))
     
     result = cursor.fetchone()
     conn.close()
@@ -4515,37 +4567,8 @@ def get_test_progress(user_id, arc_or_company_id, week_num, is_company=False):
         }
     return None
 
-def save_test_progress(user_id, arc_id, week_num, current_question, answers):
-    """Сохраняет прогресс теста"""
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    
-    answers_json = json.dumps(answers)
-    
-    cursor.execute('''
-        INSERT OR REPLACE INTO test_progress 
-        (user_id, arc_id, week_num, current_question, answers_json)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, arc_id, week_num, current_question, answers_json))
-    
-    conn.commit()
-    conn.close()
-
-def clear_test_progress(user_id, arc_id, week_num):
-    """Очищает прогресс теста (после завершения)"""
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        DELETE FROM test_progress 
-        WHERE user_id = ? AND arc_id = ? AND week_num = ?
-    ''', (user_id, arc_id, week_num))
-    
-    conn.commit()
-    conn.close()
-
-def save_test_result(user_id, arc_id, week_num, answers, score):
-    """Сохраняет результат теста"""
+def save_test_result(user_id, week_num, answers, score):
+    """Сохраняет результат теста - УПРОЩЕННАЯ (всегда arc_id=1)"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
@@ -4553,28 +4576,58 @@ def save_test_result(user_id, arc_id, week_num, answers, score):
     
     cursor.execute('''
         INSERT INTO test_results 
-        (user_id, arc_id, week_num, answers_json, score)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, arc_id, week_num, answers_json, score))
+        (user_id, arc_id, company_arc_id, week_num, answers_json, score)
+        VALUES (?, 1, NULL, ?, ?, ?)
+    ''', (user_id, week_num, answers_json, score))
     
     conn.commit()
     conn.close()
     
     # Очищаем прогресс
-    clear_test_progress(user_id, arc_id, week_num)
+    clear_test_progress(user_id, week_num)
     
     return cursor.lastrowid
 
-def get_test_result(user_id, arc_id, week_num):
-    """Получает результат теста"""
+
+def save_test_result(user_id, week_num, answers, score):
+    """Сохраняет результат теста - РАБОТАЕТ С company_arc_id"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    answers_json = json.dumps(answers) if answers else '{}'
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_results 
+        (user_id, company_arc_id, week_num, score, answers_json)
+        VALUES (?, 1, ?, ?, ?)
+    ''', (user_id, week_num, score, answers_json))
+    
+    conn.commit()
+    conn.close()
+
+def clear_test_progress(user_id, week_num):
+    """Очищает прогресс теста - РАБОТАЕТ С company_arc_id"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM test_progress 
+        WHERE user_id = ? AND company_arc_id = 1 AND week_num = ?
+    ''', (user_id, week_num))
+    
+    conn.commit()
+    conn.close()
+
+def get_test_result(user_id, week_num):
+    """Получает результат теста - РАБОТАЕТ С company_arc_id"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT result_id, score, answers_json, completed_at
         FROM test_results 
-        WHERE user_id = ? AND arc_id = ? AND week_num = ?
-    ''', (user_id, arc_id, week_num))
+        WHERE user_id = ? AND company_arc_id = 1 AND week_num = ?
+    ''', (user_id, week_num))
     
     result = cursor.fetchone()
     conn.close()
@@ -4589,25 +4642,34 @@ def get_test_result(user_id, arc_id, week_num):
         }
     return None
 
-def get_all_test_results(user_id, arc_id=None):
-    """Получает все результаты тестов пользователя"""
+def save_test_progress(user_id, week_num, current_question, answers):
+    """Сохраняет прогресс теста - РАБОТАЕТ С company_arc_id"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    if arc_id:
-        cursor.execute('''
-            SELECT result_id, arc_id, week_num, score, completed_at
-            FROM test_results 
-            WHERE user_id = ? AND arc_id = ?
-            ORDER BY completed_at DESC
-        ''', (user_id, arc_id))
-    else:
-        cursor.execute('''
-            SELECT result_id, arc_id, week_num, score, completed_at
-            FROM test_results 
-            WHERE user_id = ?
-            ORDER BY completed_at DESC
-        ''', (user_id,))
+    answers_json = json.dumps(answers) if answers else '{}'
+    
+    # Используем company_arc_id = 1 (первая компания)
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_progress 
+        (user_id, company_arc_id, week_num, current_question, answers_json)
+        VALUES (?, 1, ?, ?, ?)
+    ''', (user_id, week_num, current_question, answers_json))
+    
+    conn.commit()
+    conn.close()
+
+def get_all_test_results(user_id):
+    """Получает все результаты тестов - РАБОТАЕТ С company_arc_id"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT result_id, week_num, score, completed_at
+        FROM test_results 
+        WHERE user_id = ? AND company_arc_id = 1
+        ORDER BY completed_at DESC
+    ''', (user_id,))
     
     results = cursor.fetchall()
     conn.close()

@@ -530,7 +530,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔙 Назад к инструментам": admin_tools_menu,
         "🔙 Назад": show_training_catalog,
         "📈 Тестирование": testing_menu,
-        "📈 Пройти тест": show_available_tests,  # Теперь это выбор марафона
+        "📈 Пройти тест": show_available_tests,
         "📊 Мои результаты": lambda u, c: show_test_results(u, c),
         "📋 Показать все ответы": show_all_test_answers,
         "🔙 Назад к тестированию": testing_menu,
@@ -10549,24 +10549,56 @@ async def load_tests_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ==================== ТЕСТИРОВАНИЕ ====================
 
 async def testing_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Главное меню тестирования"""
+    """Главное меню тестирования - С ПРОВЕРКОЙ КОМПАНИИ"""
     context.user_data['current_section'] = 'testing'
     user_id = update.message.from_user.id
     
-    # Проверяем есть ли активные марафоны
-    from database import get_user_active_arcs
-    active_arcs = get_user_active_arcs(user_id)
+    # ★★★ ПРОВЕРКА КОМПАНИИ ★★★
+    from database import check_user_company_access, get_user_company
     
-    if not active_arcs:
-        await update.message.reply_text(
-            "📈 **Тестирование**\n\n"
-            "У вас нет активных марафонов.\n"
-            "Тесты доступны только во время прохождения марафонов.",
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([["🔙 В главное меню"]], resize_keyboard=True)
-        )
+    has_company_access, message = check_user_company_access(user_id)
+    user_company = get_user_company(user_id)
+    
+    if not has_company_access:
+        # Показываем сообщение в зависимости от статуса
+        if user_company:
+            # Есть компания, но нет доступа
+            keyboard = [
+                ["💰 Купить доступ к тренингу"],
+                ["🔙 В главное меню"]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            
+            await update.message.reply_text(
+                f"📈 **Тестирование**\n\n"
+                f"🏢 **Компания:** {user_company['name']}\n"
+                f"❌ **Нет доступа к тренингу!**\n\n"
+                f"Для доступа к тестам необходимо купить доступ к тренингу компании.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            # Нет компании
+            keyboard = [
+                ["🔑 Ввести ключ компании"],
+                ["🔙 В главное меню"]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            
+            await update.message.reply_text(
+                "📈 **Тестирование**\n\n"
+                "❌ **Вы не состоите в компании!**\n\n"
+                "Тесты доступны только участникам компаний.\n\n"
+                "1. Получите ключ компании у администратора\n"
+                "2. Перейдите в 👤 Профиль → 🔑 Ввести ключ компании\n"
+                "3. Введите полученный ключ\n\n"
+                "После этого тесты станут доступны.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
         return
     
+    # ★★★ ЕСТЬ ДОСТУП К КОМПАНИИ - ПОКАЗЫВАЕМ ТЕСТЫ ★★★
     keyboard = [
         ["📈 Пройти тест"],
         ["📊 Мои результаты"],
@@ -10581,76 +10613,109 @@ async def testing_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• **Неделя 1** - дни 1-7\n"
         "• **Неделя 2** - дни 8-14\n"
         "• **Неделя 3** - дни 15-21\n"
-        "• **Неделя 4** - дни 22-28\n\n"
+        "• **Неделя 4** - дни 22-28\n"
+        "• **Неделя 5** - дни 29-35\n"
+        "• **Неделя 6** - дни 36-42\n"
+        "• **Неделя 7** - дни 43-49\n"
+        "• **Неделя 8** - дни 50-56\n\n"
         "Каждый тест: 15 вопросов, 5 вариантов ответа.",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
 async def show_available_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает выбор марафона для тестирования - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Показывает выбор марафона для тестирования - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     user_id = update.message.from_user.id
     
-    # Получаем активные марафоны
-    from database import get_user_active_arcs
-    active_arcs = get_user_active_arcs(user_id)
+    # ★★★ ПРОВЕРКА КОМПАНИИ ★★★
+    from database import check_user_company_access
+    has_company_access, _ = check_user_company_access(user_id)
     
-    if not active_arcs:
+    if not has_company_access:
         await update.message.reply_text(
-            "📭 **Нет активных марафонов.**\n\n"
-            "Тесты доступны только во время прохождения марафонов.",
+            "📭 **Нет доступа к тестам.**\n\n"
+            "Для доступа к тестам необходим доступ к тренингу компании.",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup([["🔙 Назад к тестированию"]], resize_keyboard=True)
         )
         return
     
-    keyboard = []
+    # ★★★ ВСЕГДА ИСПОЛЬЗУЕМ СТАНДАРТНЫЙ ТРЕНИНГ (arc_id=1) ★★★
+    # Получаем информацию о стандартном тренинге
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT title FROM arcs WHERE arc_id = 1')
+    arc_title_result = cursor.fetchone()
+    arc_title = arc_title_result[0] if arc_title_result else "8-недельный тренинг"
+    conn.close()
     
-    for arc in active_arcs:
-        # Распаковываем все 6 значений
-        arc_id, arc_title, start_date, end_date, access_type, arc_type = arc
+    # Сохраняем в контекст
+    context.user_data['current_arc_id'] = 1
+    context.user_data['current_arc_title'] = arc_title
+    context.user_data['current_arc_type'] = 'arc'  # Всегда обычный тренинг
+    
+    # Получаем доступные тесты
+    from database import get_available_tests
+    available_tests = get_available_tests(user_id)
+    
+    if not available_tests:
+        await update.message.reply_text(
+            f"📭 **Нет доступных тестов для '{arc_title}'.**\n\n"
+            f"Тесты станут доступны после выполнения заданий первых дней.",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 Назад к тестированию"]], resize_keyboard=True)
+        )
+        return
+    
+    # Создаем клавиатуру
+    keyboard = []
+    test_mapping = {}
+    
+    for test_info in available_tests:
+        week_num = test_info['week_num']
+        status = test_info['status']
+        completed = test_info['completed']
         
-        # Форматируем даты
-        if start_date:
-            if hasattr(start_date, 'strftime'):
-                start_str = start_date.strftime('%d.%m')
-            elif isinstance(start_date, str):
-                start_str = start_date[:10]
-            else:
-                start_str = str(start_date)[:10]
+        if completed:
+            btn_text = f"✅ Неделя {week_num} (пройден)"
+        elif status == "доступен":
+            btn_text = f"📝 Неделя {week_num} (доступен)"
         else:
-            start_str = "не указана"
-            
-        if end_date:
-            if hasattr(end_date, 'strftime'):
-                end_str = end_date.strftime('%d.%m')
-            elif isinstance(end_date, str):
-                end_str = end_date[:10]
-            else:
-                end_str = str(end_date)[:10]
-        else:
-            end_str = "не указана"
+            btn_text = f"⏳ Неделя {week_num} (скоро)"
         
-        btn_text = f"🏁 {arc_title}"
         keyboard.append([btn_text])
-        
-        # Сохраняем маппинг
-        if 'arc_selection_map' not in context.user_data:
-            context.user_data['arc_selection_map'] = {}
-        context.user_data['arc_selection_map'][btn_text] = {
-            'arc_id': arc_id,
-            'arc_title': arc_title,
-            'start_date': start_date,
-            'end_date': end_date,
-            'arc_type': arc_type
+        test_mapping[btn_text] = {
+            'week_num': week_num,
+            'status': status,
+            'completed': completed
         }
     
     keyboard.append(["🔙 Назад к тестированию"])
+    
+    # Сохраняем маппинг
+    context.user_data['test_mapping'] = test_mapping
+    
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
+    message = f"📝 **ТЕСТЫ ДЛЯ МАРАФОНА**\n\n"
+    message += f"🏁 **Название:** {arc_title}\n\n"
+    message += "**Доступные тесты:**\n"
+    
+    for test_info in available_tests:
+        week_num = test_info['week_num']
+        status = test_info['status']
+        
+        if status == "пройден":
+            message += f"✅ Неделя {week_num} - пройден\n"
+        elif status == "доступен":
+            message += f"📝 Неделя {week_num} - доступен\n"
+        else:
+            message += f"⏳ Неделя {week_num} - скоро\n"
+    
+    message += "\nВыберите тест для прохождения:"
+    
     await update.message.reply_text(
-        "🏁 **ВЫБОР ТРЕНИНГА**\n\n"
-        "Выберите тренинг для прохождения теста:",
+        message,
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -10748,7 +10813,7 @@ async def show_tests_for_arc(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начинает тест - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+    """Начинает тест - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     user_id = update.message.from_user.id
     text = update.message.text
     
@@ -10770,21 +10835,12 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Получаем данные марафона
-    arc_id = context.user_data.get('current_arc_id')
-    arc_title = context.user_data.get('current_arc_title', 'Марафон')
-    arc_type = context.user_data.get('current_arc_type', 'arc')
+    arc_title = context.user_data.get('current_arc_title', '8-недельный тренинг')
     
-    if not arc_id:
-        await update.message.reply_text("❌ Ошибка: данные марафона не найдены")
-        await show_available_tests(update, context)
-        return
-    
-    print(f"🔍 Запуск теста: week={week_num}, arc_id={arc_id}, arc_type={arc_type}")
+    print(f"🔍 Запуск теста: week={week_num}")
     
     # Проверяем есть ли незаконченный тест
     from database import get_test_progress, get_tests_for_week
-    is_company = (arc_type == 'company')
     
     # Получаем вопросы теста
     tests = get_tests_for_week(week_num)
@@ -10797,40 +10853,43 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Проверяем прогресс
-    progress = get_test_progress(user_id, arc_id, week_num, is_company)
+    # ★★★ ИСПРАВЛЕНИЕ: получаем прогресс
+    progress = get_test_progress(user_id, week_num)
     
     if progress:
         # Продолжаем прерванный тест
         current_question = progress['current_question']
-        context.user_data['test_answers'] = progress['answers']
-        context.user_data['test_question_num'] = current_question
+        answers = progress['answers']
         message = f"🔄 **Продолжение теста недели {week_num}**\n\n"
         message += f"Вы прервали тест на вопросе {current_question} из {len(tests)}.\n"
         message += "Продолжим?"
     else:
         # Начинаем новый тест
-        context.user_data['test_answers'] = {}
-        context.user_data['test_question_num'] = 1
+        current_question = 1
+        answers = {}
         message = f"📝 **НАЧАЛО ТЕСТА НЕДЕЛИ {week_num}**\n\n"
         message += f"Марафон: {arc_title}\n"
         message += f"Количество вопросов: {len(tests)}\n"
         message += "Теперь приступим к первому вопросу!"
     
-    # Сохраняем данные теста
+    # ★★★ ИСПРАВЛЕНИЕ: Сохраняем данные теста
     context.user_data['current_test'] = {
-        'arc_id': arc_id,
         'arc_title': arc_title,
-        'arc_type': arc_type,
         'week_num': week_num,
         'total_questions': len(tests),
         'questions': tests,
-        'is_company': is_company
+        'current_question': current_question,  # ★ ВАЖНО: добавляем здесь
+        'answers': answers                     # ★ ВАЖНО: сохраняем ответы
     }
     
+    # ★★★ УДАЛЯЕМ старые ключи
+    context.user_data.pop('test_answers', None)
+    context.user_data.pop('test_question_num', None)
+    
+    print(f"🔍 test_data создан: current_question={current_question}, answers={len(answers)}")
+    
     keyboard = [
-        ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"],
-        ["⏹️ Прервать тест"]
+        ["⏹️ Прервать тест"]  # Будет заменено в show_question
     ]
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -10851,8 +10910,9 @@ async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, ques
         await update.message.reply_text("❌ Нет активного теста")
         return
     
+    # ★★★ ИСПРАВЛЕНИЕ: Получаем question_num из test_data если не передан
     if question_num is None:
-        question_num = test_data['current_question']
+        question_num = test_data.get('current_question', 1)  # Используем get с default
     
     questions = test_data['questions']
     
@@ -10870,7 +10930,7 @@ async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, ques
     message += f"📝 **Вопрос {question_num} из 15**\n\n"
     message += f"{question_text}\n"
     
-    # ★★ ИСПРАВЛЕНИЕ: Создаем клавиатуру 2 кнопки в ряд
+    # ★★ ИСПРАВЛЕНИЕ: Создаем клавиатуру с текстом вариантов ответа
     keyboard = []
     option_mapping = {}  # Для сопоставления текста кнопки с optionX
     
@@ -10887,21 +10947,15 @@ async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, ques
     if option5 and str(option5).strip():
         options.append((option5, 'option5'))
     
-    # Располагаем по 2 кнопки в ряд
-    current_row = []
-    for i, (option_text, option_key) in enumerate(options, 1):
-        # Обрезаем текст для кнопки
+    # Располагаем по 1 кнопке в ряд (варианты ответа)
+    for option_text, option_key in options:
+        # Обрезаем текст для кнопки если слишком длинный
         display_text = option_text
-        if len(display_text) > 20:
-            display_text = display_text[:17] + "..."
+        if len(display_text) > 40:
+            display_text = display_text[:37] + "..."
         
-        current_row.append(display_text)
+        keyboard.append([display_text])
         option_mapping[display_text] = option_key
-        
-        # Каждые 2 кнопки или последняя кнопка
-        if i % 2 == 0 or i == len(options):
-            keyboard.append(current_row)
-            current_row = []
     
     # Кнопка прерывания отдельной строкой
     keyboard.append(["⏹️ Прервать тест"])
@@ -10911,9 +10965,14 @@ async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, ques
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    # Сохраняем текущий вопрос
+    # ★★★ ИСПРАВЛЕНИЕ: Сохраняем текущий вопрос в test_data
     test_data['current_question'] = question_num
     context.user_data['current_test'] = test_data
+    
+    # ★★★ ДОБАВИТЬ ОТЛАДОЧНУЮ ИНФОРМАЦИЮ
+    print(f"🔍 show_question: question_num={question_num}")
+    print(f"🔍 options count: {len(options)}")
+    print(f"🔍 option_mapping: {option_mapping}")
     
     await update.message.reply_text(
         message,
@@ -10922,9 +10981,12 @@ async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, ques
     )
 
 async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает ответ на вопрос теста - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Обрабатывает ответ на вопрос теста - РАБОТАЕТ С ТЕКСТОВЫМИ КНОПКАМИ"""
     user_id = update.message.from_user.id
     text = update.message.text
+    
+    # ★★★ ДОБАВИТЬ ОТЛАДКУ
+    print(f"🔍 process_test_answer вызван с text='{text}'")
     
     # Проверяем активный тест
     test_data = context.user_data.get('current_test')
@@ -10943,10 +11005,9 @@ async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         from database import save_test_progress
         save_test_progress(
             user_id=user_id,
-            arc_id=test_data['arc_id'],
             week_num=test_data['week_num'],
             current_question=test_data['current_question'],
-            answers=test_data['answers']
+            answers=test_data.get('answers', {})
         )
         
         context.user_data.pop('current_test', None)
@@ -10961,28 +11022,22 @@ async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
     
-    # ★★ ИСПРАВЛЕНИЕ: Получаем выбранный вариант из маппинга
+    # ★★★ ИСПРАВЛЕНИЕ: Получаем выбранный вариант из маппинга
     option_mapping = context.user_data.get('current_question_options', {})
     
-    # Пробуем найти точное совпадение
+    # Пробуем найти точное совпадение по тексту кнопки
     selected_option_key = None
+    selected_text = text
+    
     for option_text, option_value in option_mapping.items():
-        # Сравниваем текст кнопки (возможно обрезанный)
-        if text in option_text or option_text.startswith(text[:30]):
+        # ★★ Сравниваем текст кнопки (с учетом возможного обрезания)
+        if text == option_text or option_text.startswith(text[:40]):
             selected_option_key = option_value
+            selected_text = option_text  # Сохраняем оригинальный текст
             break
     
-    # Если не нашли точное совпадение, ищем по префиксу (1., 2., и т.д.)
-    if not selected_option_key and text.startswith(('1.', '2.', '3.', '4.', '5.')):
-        prefix = text.split('.')[0]
-        option_map_prefix = {
-            '1': 'option1',
-            '2': 'option2',
-            '3': 'option3',
-            '4': 'option4',
-            '5': 'option5'
-        }
-        selected_option_key = option_map_prefix.get(prefix)
+    print(f"🔍 selected_option_key: {selected_option_key}")
+    print(f"🔍 option_mapping: {option_mapping}")
     
     if not selected_option_key:
         await update.message.reply_text("❌ Выберите вариант ответа из предложенных")
@@ -11002,27 +11057,22 @@ async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Проверяем правильность
     is_correct = (selected_option_key == correct_option)
     
-    # Получаем текст выбранного варианта
-    option_texts = {
-        'option1': option1,
-        'option2': option2,
-        'option3': option3,
-        'option4': option4,
-        'option5': option5
-    }
-    selected_text = option_texts.get(selected_option_key, 'не указан')
+    # Сохраняем ответ в test_data
+    if 'answers' not in test_data:
+        test_data['answers'] = {}
     
-    # Сохраняем ответ
     test_data['answers'][str(test_id)] = {
         'selected': selected_option_key,
-        'selected_text': selected_text,  # ★★ Добавляем текст выбранного варианта
+        'selected_text': selected_text,  # Сохраняем текст, который выбрал пользователь
         'correct': is_correct,
         'question_text': question_text
     }
     
+    # ★★★ ИСПРАВЛЕНИЕ: Сохраняем обновленный test_data
+    context.user_data['current_test'] = test_data
+    
     # Переходим к следующему вопросу
     test_data['current_question'] += 1
-    context.user_data['current_test'] = test_data
     
     # Очищаем маппинг текущего вопроса
     context.user_data.pop('current_question_options', None)
@@ -11031,7 +11081,6 @@ async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     from database import save_test_progress
     save_test_progress(
         user_id=user_id,
-        arc_id=test_data['arc_id'],
         week_num=test_data['week_num'],
         current_question=test_data['current_question'],
         answers=test_data['answers']
@@ -11043,93 +11092,76 @@ async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         await finish_test(update, context)
 
-def save_test_progress(user_id, arc_or_company_id, week_num, current_question, answers, is_company=False):
-    """Сохраняет прогресс теста - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+def save_test_progress(user_id, week_num, current_question, answers):
+    """Сохраняет прогресс теста - УПРОЩЕННАЯ (всегда arc_id=1)"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     answers_json = json.dumps(answers) if answers else '{}'
     
-    if is_company:
-        cursor.execute('''
-            INSERT OR REPLACE INTO test_progress 
-            (user_id, company_arc_id, week_num, current_question, answers_json)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, arc_or_company_id, week_num, current_question, answers_json))
-    else:
-        cursor.execute('''
-            INSERT OR REPLACE INTO test_progress 
-            (user_id, arc_id, week_num, current_question, answers_json)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, arc_or_company_id, week_num, current_question, answers_json))
+    # ★★★ ВСЕГДА ИСПОЛЬЗУЕМ arc_id = 1
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_progress 
+        (user_id, arc_id, week_num, current_question, answers_json)
+        VALUES (?, 1, ?, ?, ?)
+    ''', (user_id, week_num, current_question, answers_json))
     
     conn.commit()
     conn.close()
 
-def save_test_result(user_id, arc_or_company_id, week_num, answers, score, is_company=False):
-    """Сохраняет результат теста - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+def save_test_result(user_id, week_num, answers, score):
+    """Сохраняет результат теста - УПРОЩЕННАЯ (всегда arc_id=1)"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     answers_json = json.dumps(answers) if answers else '{}'
     
-    if is_company:
-        cursor.execute('''
-            INSERT OR REPLACE INTO test_results 
-            (user_id, company_arc_id, week_num, score, answers_json)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, arc_or_company_id, week_num, score, answers_json))
-    else:
-        cursor.execute('''
-            INSERT OR REPLACE INTO test_results 
-            (user_id, arc_id, week_num, score, answers_json)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, arc_or_company_id, week_num, score, answers_json))
+    # ★★★ ВСЕГДА ИСПОЛЬЗУЕМ arc_id = 1, company_arc_id = NULL
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_results 
+        (user_id, arc_id, company_arc_id, week_num, score, answers_json)
+        VALUES (?, 1, NULL, ?, ?, ?)
+    ''', (user_id, week_num, score, answers_json))
     
     conn.commit()
     conn.close()
 
-def clear_test_progress(user_id, arc_or_company_id, week_num, is_company=False):
-    """Очищает прогресс теста - ОБНОВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
+def clear_test_progress(user_id, week_num):
+    """Очищает прогресс теста - УПРОЩЕННАЯ (всегда arc_id=1)"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    if is_company:
-        cursor.execute('''
-            DELETE FROM test_progress 
-            WHERE user_id = ? AND company_arc_id = ? AND week_num = ?
-        ''', (user_id, arc_or_company_id, week_num))
-    else:
-        cursor.execute('''
-            DELETE FROM test_progress 
-            WHERE user_id = ? AND arc_id = ? AND week_num = ?
-        ''', (user_id, arc_or_company_id, week_num))
+    # ★★★ ВСЕГДА ИСПОЛЬЗУЕМ arc_id = 1
+    cursor.execute('''
+        DELETE FROM test_progress 
+        WHERE user_id = ? AND arc_id = 1 AND week_num = ?
+    ''', (user_id, week_num))
     
     conn.commit()
     conn.close()
 
 async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершает тест и показывает результаты"""
+    """Завершает тест и показывает результаты - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     test_data = context.user_data.get('current_test')
     if not test_data:
         await update.message.reply_text("❌ Нет активного теста")
         return
     
     user_id = update.message.from_user.id
-    arc_id = test_data['arc_id']
     week_num = test_data['week_num']
-    answers = test_data['answers']
+    answers = test_data.get('answers', {})
     
     # Подсчет результатов
     total_questions = len(test_data['questions'])
     correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
     score = int((correct_answers / total_questions) * 100) if total_questions > 0 else 0
     
+    print(f"🔍 finish_test: week={week_num}, answers={len(answers)}, correct={correct_answers}, score={score}")
+    
     # Сохраняем результат
     from database import save_test_result
     result_id = save_test_result(
         user_id=user_id,
-        arc_id=arc_id,
         week_num=week_num,
         answers=answers,
         score=score
@@ -11137,31 +11169,27 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Очищаем данные теста
     context.user_data.pop('current_test', None)
+    context.user_data.pop('current_question_options', None)
     
     # Показываем результаты
-    await show_test_results(update, context, user_id, arc_id, week_num)
+    await show_test_results(update, context, user_id, week_num)
 
-async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id=None, arc_id=None, week_num=None):
-    """Показывает результаты теста - НОВАЯ ВЕРСИЯ: сначала выбор марафона"""
+async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id=None, week_num=None):
+    """Показывает результаты теста - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     if user_id is None:
         user_id = update.message.from_user.id
     
-    # ★★ ИСПРАВЛЕНИЕ 1: Если переданы arc_id и week_num, показываем конкретный тест
-    if arc_id and week_num:
+    # ★★★ УПРОЩАЕМ: Если передан week_num, показываем конкретный тест
+    if week_num:
         from database import get_test_result, get_tests_for_week
-        result_data = get_test_result(user_id, arc_id, week_num)
+        result_data = get_test_result(user_id, week_num)
         
         if not result_data:
             await update.message.reply_text("❌ Результаты теста не найдены")
             return
         
-        # Получаем название марафона
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
-        arc_title_result = cursor.fetchone()
-        arc_title = arc_title_result[0] if arc_title_result else f"Марафон {arc_id}"
-        conn.close()
+        # ★★★ ВСЕГДА arc_id = 1 (но теперь не передаем его)
+        arc_title = "8-недельный тренинг"  # Константа
         
         score = result_data['score']
         answers = result_data['answers']
@@ -11170,11 +11198,11 @@ async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         questions = get_tests_for_week(week_num)
         question_map = {str(q[0]): q for q in questions}  # test_id -> question data
         
-        # Формируем сообщение с ошибками
-        await show_test_result_details(update, context, arc_id, arc_title, week_num, score, answers, question_map)
+        # ★★★ ИСПРАВЛЕНИЕ: передаем без arc_id
+        await show_test_result_details(update, context, arc_title, week_num, score, answers, question_map)
         return
     
-    # ★★ ИСПРАВЛЕНИЕ 2: Показываем сначала список марафонов с результатами
+    # ★★★ УПРОЩАЕМ: Показываем все результаты пользователя
     from database import get_all_test_results
     results = get_all_test_results(user_id)
     
@@ -11186,123 +11214,57 @@ async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
         return
     
-    # Группируем результаты по марафонам
-    arc_results = {}
-    for result_id, res_arc_id, res_week_num, score, completed_at in results:
-        if res_arc_id not in arc_results:
-            arc_results[res_arc_id] = []
-        arc_results[res_arc_id].append({
-            'week_num': res_week_num,
-            'score': score,
-            'completed_at': completed_at,
-            'result_id': result_id
-        })
-    
-    # ★★ НОВОЕ: Сначала показываем выбор марафона
+    # ★★★ УПРОЩАЕМ: Только один марафон - 8-недельный тренинг
+    # Показываем сразу все результаты
+    arc_title = "8-недельный тренинг"
     keyboard = []
-    arc_mapping = {}
     
-    for arc_id, tests in arc_results.items():
-        # Получаем название марафона
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
-        arc_title_result = cursor.fetchone()
-        arc_title = arc_title_result[0] if arc_title_result else f"Марафон {arc_id}"
-        conn.close()
-        
-        # Формируем текст кнопки
-        tests_count = len(tests)
-        btn_text = f"📚 {arc_title} ({tests_count} тест{'ов' if tests_count > 1 else ''})"
+    for result_id, res_week_num, score, completed_at in results:
+        date_str = completed_at[:10] if completed_at else "??"
+        btn_text = f"📊 Неделя {res_week_num} ({score}%) - {date_str}"
         keyboard.append([btn_text])
         
         # Сохраняем маппинг
-        arc_mapping[btn_text] = {
-            'arc_id': arc_id,
-            'arc_title': arc_title,
-            'tests': tests
+        if 'test_results_mapping' not in context.user_data:
+            context.user_data['test_results_mapping'] = {}
+        context.user_data['test_results_mapping'][btn_text] = {
+            'week_num': res_week_num
         }
-    
-    context.user_data['arc_results_mapping'] = arc_mapping
     
     keyboard.append(["🔙 Назад к тестированию"])
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        "📊 **ВАШИ РЕЗУЛЬТАТЫ ТЕСТОВ**\n\n"
-        "Выберите марафон для просмотра результатов:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def show_tests_for_arc_results(update: Update, context: ContextTypes.DEFAULT_TYPE, arc_id=None, arc_title=None):
-    """Показывает тесты выбранного марафона для просмотра результатов"""
-    user_id = update.message.from_user.id
-    
-    # Если переданы arc_id и arc_title, используем их
-    if arc_id and arc_title:
-        pass  # Используем переданные значения
-    else:
-        # Ищем в сохраненных данных
-        arc_data = context.user_data.get('current_arc_for_results', {})
-        if arc_data:
-            arc_id = arc_data.get('arc_id')
-            arc_title = arc_data.get('arc_title')
-        else:
-            # Получаем из mapping
-            text = update.message.text
-            arc_mapping = context.user_data.get('arc_results_mapping', {})
-            arc_info = arc_mapping.get(text)
-            
-            if not arc_info:
-                await update.message.reply_text("❌ Марафон не найден")
-                return
-            
-            arc_id = arc_info['arc_id']
-            arc_title = arc_info['arc_title']
-    
-    # Получаем результаты тестов для этого марафона
-    from database import get_all_test_results
-    all_results = get_all_test_results(user_id, arc_id)
-    
-    if not all_results:
-        await update.message.reply_text(
-            f"📭 **Нет результатов тестов для марафона '{arc_title}'.**",
-            parse_mode='Markdown'
-        )
-        return
-    
-    keyboard = []
-    results_mapping = {}
-    
-    for result_id, res_arc_id, week_num, score, completed_at in all_results:
-        date_str = completed_at[:10] if completed_at else "??"
-        
-        btn_text = f"📊 Неделя {week_num} ({score}%) - {date_str}"
-        keyboard.append([btn_text])
-        
-        results_mapping[btn_text] = {
-            'arc_id': arc_id,
-            'week_num': week_num
-        }
-    
-    context.user_data['test_results_mapping'] = results_mapping
-    
-    keyboard.append(["🔙 Выбрать другой марафон"])
-    keyboard.append(["🔙 Назад к тестированию"])
-    
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        f"📊 **РЕЗУЛЬТАТЫ МАРАФОНА: {arc_title}**\n\n"
+        f"📊 **ВАШИ РЕЗУЛЬТАТЫ ТЕСТОВ**\n\n"
+        f"🏁 **Тренинг:** {arc_title}\n"
+        f"📈 **Всего пройдено тестов:** {len(results)}\n\n"
         f"Выберите тест для просмотра деталей:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
+async def show_tests_for_arc_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает тесты выбранного марафона для просмотра результатов - УПРОЩЕННАЯ"""
+    # ★★★ УПРОЩАЕМ: эта функция почти не нужна, но оставляем для обработки кнопок
+    
+    user_id = update.message.from_user.id
+    
+    # Если нажали на результат из mapping
+    text = update.message.text
+    if 'test_results_mapping' in context.user_data and text in context.user_data['test_results_mapping']:
+        test_info = context.user_data['test_results_mapping'][text]
+        week_num = test_info['week_num']
+        
+        # Показываем результат теста
+        await show_test_results(update, context, user_id, week_num)
+        return
+    
+    # Иначе показываем все результаты
+    await show_test_results(update, context, user_id)
+
 async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                   arc_id, arc_title, week_num, score, answers, question_map):
-    """Показывает детали результатов теста - ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+                                   arc_title, week_num, score, answers, question_map):
+    """Показывает детали результатов теста - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     total_questions = len(question_map)
     correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
     
@@ -11340,6 +11302,8 @@ async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT
                     'option5': option5
                 }
                 
+                # Получаем selected_text из сохраненных ответов
+                answer_data = answers.get(test_id_str, {})
                 selected_text = answer_data.get('selected_text', 'не указан')
                 correct_text = option_texts.get(correct_option, 'не указан')
                 
@@ -11359,23 +11323,17 @@ async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT
     # Кнопки
     keyboard = [
         ["📋 Показать все ответы"],
-        ["🔙 Назад к тестам марафона"],
+        ["🔙 Назад к результатам"],
         ["📈 Пройти другой тест"]
     ]
     
-    # Сохраняем данные для показа всех ответов
+    # ★★★ ИСПРАВЛЕНИЕ: сохраняем только week_num и arc_title (arc_id не нужен)
     context.user_data['current_test_details'] = {
-        'arc_id': arc_id,
         'arc_title': arc_title,
         'week_num': week_num,
         'score': score,
         'answers': answers,
         'question_map': question_map
-    }
-    
-    context.user_data['current_arc_for_results'] = {
-        'arc_id': arc_id,
-        'arc_title': arc_title
     }
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -11392,7 +11350,7 @@ async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def show_all_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает все ответы теста (15 вопросов) - ПОЛНАЯ ВЕРСИЯ"""
+    """Показывает все ответы теста (15 вопросов) - УПРОЩЕННАЯ ДЛЯ КОМПАНИЙ"""
     test_details = context.user_data.get('current_test_details')
     if not test_details:
         await update.message.reply_text("❌ Нет данных для отображения")
@@ -11450,7 +11408,7 @@ async def show_all_test_answers(update: Update, context: ContextTypes.DEFAULT_TY
             message += f"❌\n"
             message += f"**💡 Верный ответ:** {correct_text}\n"
             
-            # ★★ ПОЯСНЕНИЕ если есть и ответ неверный
+            # Пояснение если есть и ответ неверный
             if explanation and str(explanation).strip():
                 message += f"   **📝 Пояснение:** {explanation[:150]}...\n"
         
@@ -11475,7 +11433,7 @@ async def show_all_test_answers(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def back_to_test_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Возвращает к результату теста из просмотра всех ответов"""
+    """Возвращает к результату теста из просмотра всех ответов - УПРОЩЕННАЯ"""
     if 'current_test_details' not in context.user_data:
         await update.message.reply_text("❌ Нет данных о тесте")
         return
@@ -11483,9 +11441,9 @@ async def back_to_test_result(update: Update, context: ContextTypes.DEFAULT_TYPE
     test_details = context.user_data['current_test_details']
     user_id = update.message.from_user.id
     
-    # Получаем результат теста заново
+    # Получаем результат теста по week_num
     from database import get_test_result, get_tests_for_week
-    result_data = get_test_result(user_id, test_details['arc_id'], test_details['week_num'])
+    result_data = get_test_result(user_id, test_details['week_num'])
     
     if not result_data:
         await update.message.reply_text("❌ Результаты теста не найдены")
@@ -11501,7 +11459,6 @@ async def back_to_test_result(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Показываем результат
     await show_test_result_details(
         update, context,
-        test_details['arc_id'],
         test_details['arc_title'],
         test_details['week_num'],
         score,
@@ -11510,16 +11467,9 @@ async def back_to_test_result(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def back_to_arc_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Возвращает к тестам марафона из просмотра результата"""
-    if 'current_arc_for_results' in context.user_data:
-        arc_data = context.user_data['current_arc_for_results']
-        await show_tests_for_arc_results(update, context, arc_data['arc_id'], arc_data['arc_title'])
-    elif 'current_test_details' in context.user_data:
-        # Используем данные из текущего теста
-        test_details = context.user_data['current_test_details']
-        await show_tests_for_arc_results(update, context, test_details['arc_id'], test_details['arc_title'])
-    else:
-        await show_test_results(update, context)
+    """Возвращает к тестам марафона из просмотра результата - УПРОЩАЕМ"""
+    # ★★★ УПРОЩАЕМ: просто возвращаем к результатам тестов
+    await show_test_results(update, context)
 
 async def admin_auto_approved_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Меню для комментариев к автоматически принятым заданиям"""
@@ -11915,6 +11865,28 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
             traceback.print_exc()
             await query.answer(error_msg, show_alert=True)
 
+async def debug_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладка данных теста"""
+    test_data = context.user_data.get('current_test', {})
+    
+    message = "🔍 **ДАННЫЕ ТЕСТА:**\n\n"
+    message += f"Ключи в test_data: {list(test_data.keys())}\n"
+    
+    if test_data:
+        message += f"week_num: {test_data.get('week_num')}\n"
+        message += f"current_question: {test_data.get('current_question')}\n"
+        message += f"total_questions: {test_data.get('total_questions')}\n"
+        message += f"questions count: {len(test_data.get('questions', []))}\n"
+        message += f"answers count: {len(test_data.get('answers', {}))}\n"
+        
+        # Показываем текущие варианты ответов
+        option_mapping = context.user_data.get('current_question_options', {})
+        message += f"\n📋 **Варианты ответов:**\n"
+        for text, option in option_mapping.items():
+            message += f"  '{text}' → {option}\n"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
 
 def main():
     application = Application.builder().token(TOKEN).build()
@@ -12037,6 +12009,7 @@ def main():
     application.add_handler(CommandHandler("loadtests", load_tests_command))
     application.add_handler(CommandHandler("debugcompany", debug_company))
     application.add_handler(CommandHandler("test1rub", test_real_payment_command))
+    application.add_handler(CommandHandler("debugtestdata", debug_test_data))
     
     
     print("Бот запущен...")
