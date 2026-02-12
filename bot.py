@@ -154,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append(["👥 Группа компании"])
     
     if has_any_access(user.id) or user.id == ADMIN_ID:
-        keyboard.append(["👥 Сообщество психолога"])
+        keyboard.append(["👥 Сообщество психолога", "🏢 Профиль компании"])
     
     if is_admin(user.id):
         keyboard.append(["👨‍🏫 Проверка заданий"])
@@ -164,11 +164,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     welcome_message = f"Приветствую вас, {user.first_name}!"
-    
-    if user_company:
-        welcome_message += f"\n\n🏢 **Ваша компания:** {user_company['name']}"
-        welcome_message += f"\n📅 **Тренинг стартует:** {user_company['start_date']}"
-    
+     
     welcome_message += "\n\nВыберите действие:"
     
     await update.message.reply_text(
@@ -560,6 +556,16 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📂 Архив заданий": show_feedback_parts,
         "📂 Архив заданий 🟡": show_feedback_parts,
         "🔙 К списку заданий": lambda u, c: show_student_part_approved(u, c),
+        "🏢 Моя компания": company_profile_menu,
+        "📋 Список участников": show_company_users_list,
+        "📊 Результаты компании": show_company_results,  # Заглушка
+        "📝 Список задач": company_tasks_menu,
+        "📝 Изменить описание": start_company_description_edit,
+        "👥 Выбор напарника (заглушка)": partner_selection_stub,
+        "➕ Добавить задачу": start_add_task,
+        "❌ Удалить задачу": start_delete_task,
+        "📌 Указать должность": start_position_input,
+        "🏢 Профиль компании": company_profile_menu,
     }
 
     if text == "🏢 Управление компаниями":
@@ -1036,6 +1042,7 @@ async def profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Если компания есть
         keyboard.append(["🏢 Моя компания"])
         keyboard.append(["👤 Изменить ФИО"])
+        keyboard.append(["📌 Указать должность"])
         keyboard.append(["⏰ Часовой пояс"])
         keyboard.append(["📋 Принятые оферты"])
         keyboard.append(["🔙 В главное меню"])
@@ -1272,9 +1279,7 @@ async def create_company_start(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(
         "🏢 **Создание новой компании**\n\n"
         "Шаг 1 из 6\n\n"
-        "Введите название компании:\n\n"
-        "Пример: 'ООО Рога и Копыта'\n"
-        "Пример: 'Академия Продаж 2026'",
+        "Введите название компании:\n\n",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -1821,7 +1826,7 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
     # Проверяем доступ к этой арке компании или к arc_id=1
     cursor.execute('''
         SELECT access_type FROM user_arc_access 
-        WHERE user_id = ? AND (company_arc_id = ? OR arc_id = 1)
+        WHERE user_id = ? AND company_arc_id = ?
         LIMIT 1
     ''', (user_id, company_arc_id))
     
@@ -1944,45 +1949,21 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
             day_to_show = current_day_num
             
             # Формируем сообщение для пробного доступа
-            message = f"🎁 **ДОСТУПНЫЕ ЗАДАНИЯ (Пробный доступ)**\n\n"
-            message += f"🏢 **Компания:** {company_name}\n"
-            message += f"📅 **Текущий день тренинга:** {current_day_num}\n"
-            message += f"🎯 **Доступные дни:** 1-3 (пробный период)\n"
-            message += f"⏳ **Осталось дней пробного доступа:** {max_allowed_day - current_day_num + 1}\n\n"
+            message = f"**ДОСТУПНЫЕ ЗАДАНИЯ (Пробный доступ)**\n\n"
+            message += f"**Компания:** {company_name}\n"
+            message += f"**Текущий день тренинга:** {current_day_num}\n"
+            message += f"**Доступные дни:** 1-3 (пробный период)\n"
             
-            # Получаем дату окончания пробного доступа
-            conn = sqlite3.connect('mentor_bot.db')
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT purchased_at FROM user_arc_access 
-                WHERE user_id = ? AND (company_arc_id = ? OR arc_id = 1) AND access_type = 'trial'
-                LIMIT 1
-            ''', (user_id, company_arc_id))
             
-            trial_start_result = cursor.fetchone()
-            
-            if trial_start_result and trial_start_result[0]:
-                from datetime import datetime, timedelta
-                try:
-                    trial_start = datetime.fromisoformat(trial_start_result[0])
-                    trial_end = trial_start + timedelta(days=3)
-                    now = datetime.now()
-                    
-                    if now < trial_end:
-                        days_left = (trial_end - now).days
-                        hours_left = (trial_end - now).seconds // 3600
-                        message += f"⏰ **Осталось времени:** {days_left} дней {hours_left} часов\n\n"
-                except:
-                    pass
             
             conn.close()
     else:
         # Полный доступ
         day_to_show = current_day_num
         
-        message = f"📝 **ДОСТУПНЫЕ ЗАДАНИЯ**\n\n"
-        message += f"🏢 **Компания:** {company_name}\n"
-        message += f"📅 **Текущий день тренинга:** {current_day_num}\n\n"
+        message = f"**ДОСТУПНЫЕ ЗАДАНИЯ**\n\n"
+        message += f"**Компания:** {company_name}\n"
+        message += f"**Текущий день тренинга:** {current_day_num}\n\n"
     
     # ★★★ ПОЛУЧАЕМ ЗАДАНИЯ ДЛЯ ТЕКУЩЕГО ДНЯ ★★★
     conn = sqlite3.connect('mentor_bot.db')
@@ -2069,7 +2050,6 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
     
     # Добавляем инструкцию к сообщению
     message += f"Доступно заданий: {total_available}\n"
-    message += f"На проверке: {total_in_progress}\n"
     message += f"Выполнено: {total_completed}\n\n"
     
     message += "💡 **Как выполнять задания:**\n\n"
@@ -2730,6 +2710,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text != "⏹️ Прервать тест":
             await process_test_answer(update, context)
             return
+
+    # === ОБРАБОТКА ВВОДА ДОЛЖНОСТИ ===
+    if context.user_data.get('waiting_for_position'):
+        await process_position_input(update, context)
+        return
+
+    # === ОБРАБОТКА ВВОДА ОПИСАНИЯ КОМПАНИИ ===
+    if context.user_data.get('waiting_for_company_description'):
+        await process_company_description(update, context)
+        return
+
+    # === ОБРАБОТКА ВВОДА ТЕКСТА ЗАДАЧИ ===
+    if context.user_data.get('waiting_for_task_text'):
+        await process_add_task(update, context)
+        return
+
+    # === ОБРАБОТКА УДАЛЕНИЯ ЗАДАЧИ ===
+    if context.user_data.get('waiting_for_task_delete'):
+        await process_delete_task(update, context)
+        return
     
 async def show_final_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает финальные кнопки после ответа (фото+текст)"""
@@ -4678,89 +4678,47 @@ async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['current_section'] = 'statistics_menu'
     user_id = update.message.from_user.id
     
-    from database import get_user_active_arcs, get_current_arc_day
-    
-    # Получаем ВСЕ части пользователя (и активные, и завершенные)
+    # ЗАМЕНИТЬ НА ЭТО:
+    # Проверяем есть ли доступ к компании
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания,
-               CASE 
-                   WHEN DATE('now') < a.дата_начала THEN 'future'
-                   WHEN DATE('now') > a.дата_окончания THEN 'past' 
-                   ELSE 'active'
-               END as status
-        FROM user_arc_access uaa
-        JOIN arcs a ON uaa.arc_id = a.arc_id
-        WHERE uaa.user_id = ?
-        ORDER BY a.дата_начала DESC
+        SELECT 1 FROM user_arc_access 
+        WHERE user_id = ? AND company_arc_id IS NOT NULL
+        LIMIT 1
     ''', (user_id,))
     
-    user_arcs = cursor.fetchall()
+    has_company_access = cursor.fetchone() is not None
     conn.close()
     
-    if not user_arcs:
+    if not has_company_access:
         await update.message.reply_text(
-            "📊 **У вас пока нет доступа к частям тренинга.**\n\n"
+            "📊 **У вас пока нет доступа к тренингу.**\n\n"
             "Приобретите доступ в разделе 'Купить тренинг'.",
             parse_mode='Markdown'
         )
         return
     
-    # Формируем клавиатуру
-    keyboard = []
-    
-    for arc_id, arc_title, arc_start, arc_end, status in user_arcs:
-        # Определяем эмодзи и текст для кнопки
-        if status == 'active':
-            emoji = "🔄"
-            status_text = "идёт сейчас"
-        elif status == 'future':
-            emoji = "⏳"
-            status_text = "начнётся"
-        else:
-            emoji = "✅"
-            status_text = "завершена"
-        
-        # Форматируем дату начала
-        if isinstance(arc_start, str):
-            start_date = arc_start.split()[0] if ' ' in arc_start else arc_start
-        else:
-            start_date = str(arc_start)
-        
-        # Создаем текст кнопки
-        btn_text = f"{emoji} {arc_title}"
-        keyboard.append([btn_text])
-        
-        # Сохраняем mapping для обработки
-        if 'statistics_arc_map' not in context.user_data:
-            context.user_data['statistics_arc_map'] = {}
-        
-        context.user_data['statistics_arc_map'][btn_text] = {
-            'arc_id': arc_id,
-            'arc_title': arc_title,
-            'status': status,
-            'start_date': start_date
-        }
-    
+    # Одна фиксированная часть
+    keyboard = [["🔄 Регулярный менеджмент(8 недель)"]]
     keyboard.append(["📚 Мои задания"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    # Формируем сообщение
+    # Сохраняем mapping
+    if 'statistics_arc_map' not in context.user_data:
+        context.user_data['statistics_arc_map'] = {}
+    
+    context.user_data['statistics_arc_map']["🔄 Регулярный менеджмент(8 недель)"] = {
+        'arc_id': 1,
+        'arc_title': 'Регулярный менеджмент(8 недель)',
+        'status': 'active',
+        'start_date': 'По графику компании'
+    }
+    
     message = "📊 **МОЙ ПРОГРЕСС**\n\n"
-    message += "Выберите марафон(дату) для просмотра статистики:\n\n"
-    
-    # Добавляем пояснение по статусам
-    message += "**Обозначения:**\n"
-    message += "• 🔄 - Часть идёт сейчас\n"
-    message += "• ✅ - Часть завершена\n\n"
-    
-    # Краткая сводка по всем частям
-    active_count = sum(1 for _, _, _, _, status in user_arcs if status == 'active')
-    future_count = sum(1 for _, _, _, _, status in user_arcs if status == 'future')
-    past_count = sum(1 for _, _, _, _, status in user_arcs if status == 'past')
+    message += "Выберите марафон для просмотра статистики:\n\n"
     
     await update.message.reply_text(
         message,
@@ -4770,7 +4728,7 @@ async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статистику по выбранной части - ОБНОВЛЕННАЯ С ФИО И ТЕГОМ"""
+    """Показывает статистику по выбранной части - ИСПРАВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
     user_id = update.message.from_user.id
     text = update.message.text
     
@@ -4785,188 +4743,81 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
     ''', (user_id,))
     
     user_info = cursor.fetchone()
-    conn.close()
     
     user_fio = user_info[0] if user_info and user_info[0] else "Не указано"
     user_username = f"@{user_info[1]}" if user_info and user_info[1] else "Нет тега"
     
-    # Получаем данные о выбранной части
-    arc_map = context.user_data.get('statistics_arc_map', {})
-    arc_info = arc_map.get(text)
+    # ★★★ ПОЛУЧАЕМ company_arc_id пользователя ★★★
+    cursor.execute('''
+        SELECT uaa.company_arc_id, ca.actual_start_date
+        FROM user_arc_access uaa
+        JOIN company_arcs ca ON uaa.company_arc_id = ca.company_arc_id
+        WHERE uaa.user_id = ? AND uaa.company_arc_id IS NOT NULL
+        LIMIT 1
+    ''', (user_id,))
     
-    if not arc_info:
-        await update.message.reply_text("❌ Часть не найдена")
+    access_result = cursor.fetchone()
+    conn.close()
+    
+    if not access_result:
+        await update.message.reply_text(
+            "❌ **Нет доступа к тренингу компании.**\n\n"
+            "Приобретите доступ в разделе 'Купить тренинг'.",
+            parse_mode='Markdown'
+        )
         return
     
-    arc_id = arc_info['arc_id']
-    arc_title = arc_info['arc_title']
-    status = arc_info['status']
-    start_date = arc_info['start_date']
+    company_arc_id = access_result[0]
+    start_date = access_result[1]
     
-    # ★★★ ДОБАВЛЯЕМ ФИО И ТЕГ В НАЧАЛО ★★★
+    # ★★★ ПОЛУЧАЕМ СТАТИСТИКУ ★★★
+    from database import get_user_skip_statistics, get_current_arc_day
+    
+    stats = get_user_skip_statistics(user_id, company_arc_id)
+    current_day_info = get_current_arc_day(user_id, company_arc_id)
+    current_day = current_day_info['day_number'] if current_day_info else 0
+    
+    # ★★★ ФОРМИРУЕМ СООБЩЕНИЕ ★★★
     message = f"👤 **{user_fio}** {user_username}\n\n"
-    message += f"📊 **Статистика по тренингу: {arc_title}**\n\n"
+    message += f"📊 **Статистика по тренингу: Регулярный менеджмент(8 недель)**\n\n"
     
-    # Определяем статус
-    from datetime import datetime
-    
-    try:
-        if isinstance(start_date, str):
-            if ' ' in start_date:
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S').date()
-            else:
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
-        else:
-            start_date_obj = start_date
-        
-        today = datetime.now().date()
-        
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT дата_окончания FROM arcs WHERE arc_id = ?', (arc_id,))
-        end_date_result = cursor.fetchone()
-        conn.close()
-        
-        end_date_str = end_date_result[0] if end_date_result else None
-        
-        if end_date_str:
-            if isinstance(end_date_str, str):
-                if ' ' in end_date_str:
-                    end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S').date()
-                else:
-                    end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            else:
-                end_date_obj = end_date_str
-            
-            if today < start_date_obj:
-                status = 'future'
-            elif start_date_obj <= today <= end_date_obj:
-                status = 'active'
-            else:
-                status = 'past'
-        else:
-            status = 'future'
-            
-    except Exception as e:
-        print(f"🚨 Ошибка определения статуса части: {e}")
-        status = arc_info.get('status', 'unknown')
-    
-    # Информация о статусе части
-    if status == 'active':
-        message += f"🔄 **Статус:** Часть идёт сейчас\n"
-    
-    stats = None
-    try:
-        from database import get_user_skip_statistics
-        stats = get_user_skip_statistics(user_id, arc_id)
-    except Exception as e:
-        print(f"⚠️ Ошибка получения статистики: {e}")
-        stats = {
-            'total_days': 0,
-            'completed_days': 0,
-            'skipped_days': 0,
-            'streak_days': 0,
-            'completion_rate': 0,
-            'completed_assignments': 0,
-            'skipped_assignments': 0,
-            'skipped_list': [],
-            'skipped_days_list': []
-        }
-    
-    # Получаем текущий день для активной части
-    current_day_info = None
-    if status == 'active':
-        try:
-            from database import get_current_arc_day
-            current_day_info = get_current_arc_day(user_id, arc_id)
-        except Exception as e:
-            print(f"⚠️ Ошибка получения текущего дня: {e}")
-            current_day_info = None
-    
-    # Информация о статусе части
-    if status == 'active':
-        if current_day_info and 'day_number' in current_day_info:
-            message += f"**Текущий день:** {current_day_info['day_number']} из 56\n"
-    elif status == 'future':
-        message += f"**Статус:** Начнётся {start_date}\n"
+    # Статус тренинга
+    if current_day == 0:
+        message += f"⏳ **Статус:** Тренинг начнётся {start_date}\n\n"
+    elif current_day > 56:
+        message += f"✅ **Статус:** Тренинг завершён\n\n"
     else:
-        message += f"**Статус:** тренинг завершен\n"
-    
-    message += f"**Дата начала:** {start_date}\n\n"
+        message += f"🔄 **Статус:** Тренинг идёт\n"
+        message += f"**Текущий день:** {current_day} из 56\n\n"
     
     # Статистика выполнения
-    if status in ['active', 'past'] and stats:
-        completed_assignments = stats.get('completed_assignments', 0)
-        skipped_assignments = stats.get('skipped_assignments', 0)
-        skipped_list = stats.get('skipped_list', [])
-        streak_days = stats.get('streak_days', 0)
+    if stats and 'error' not in stats:
+        completed = stats.get('completed_assignments', 0)
+        total = stats.get('total_assignments', 168)  # 56 дней * 3 задания
         completion_rate = stats.get('completion_rate', 0)
-
-        message += "**Статистика заданий:**\n"
-        message += f"• **Всего:** 56 дней(3 задания в день) \n"
-        message += f"• **Выполнено заданий:** {completed_assignments}\n"
-        message += f"• Процент выполнения: {completion_rate}%\n"
-
-        # Пропущенные задания
-        if skipped_assignments > 0 and skipped_list:
-            message += f"📋 **Пропущенные задания:**\n"
-            for i, skipped in enumerate(skipped_list[:10], 1):
-                assignment_name = skipped.get('assignment', f'Задание {i}')
-                message += f"{assignment_name}\n"
-            
-            if skipped_assignments > 10:
-                message += f"... и еще {skipped_assignments - 10} заданий\n"
+        streak = stats.get('streak_days', 0)
+        max_streak = stats.get('max_streak_days', 0)
+        skipped = stats.get('skipped_assignments', 0)
+        
+        message += "**📋 Статистика заданий:**\n"
+        message += f"• ✅ Выполнено: {completed} из {total}\n"
+        message += f"• 📊 Прогресс: {completion_rate}%\n"
+        message += f"• 🔥 Текущая серия: {streak} дней\n"
+        message += f"• 🏆 Лучшая серия: {max_streak} дней\n"
+        
+        if skipped > 0:
+            message += f"• ⚠️ Пропущено: {skipped} заданий\n"
         else:
-            message += "**• Пропущенных заданий нет!**\n"
+            message += "• ✅ Пропущенных заданий нет!\n"
         
-        if streak_days > 0:
-            message += f"• Лучшая серия выполнения: {streak_days} дней подряд без пропусков\n"
-        
-        message += "\n"
-        
-        # Пропущенные дни
-        skipped_days_list = stats.get('skipped_days_list', [])
-        if skipped_days_list:
-            message += "📋 **Пропущенные дни:**\n"
-            for day_title in skipped_days_list[:5]:
-                message += f"• {day_title}\n"
-            if len(skipped_days_list) > 5:
-                message += f"• ... и ещё {len(skipped_days_list) - 5} дней\n"
-            message += "\n"
-    
-    # Дополнительная статистика
-    if status in ['active', 'past']:
-        conn = None
-        try:
-            conn = sqlite3.connect('mentor_bot.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT 
-                    COUNT(DISTINCT a.assignment_id) as total_assignments,
-                    SUM(CASE WHEN upa.status IN ('submitted', 'approved') THEN 1 ELSE 0 END) as completed_assignments,
-                    SUM(CASE WHEN upa.status = 'submitted' THEN 1 ELSE 0 END) as in_progress_assignments,
-                    SUM(CASE WHEN upa.status = 'approved' THEN 1 ELSE 0 END) as approved_assignments
-                FROM assignments a
-                JOIN days d ON a.day_id = d.day_id
-                LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
-                WHERE d.arc_id = ?
-            ''', (user_id, arc_id))
-            
-            result = cursor.fetchone()
-            
-            if result:
-                total_assignments, completed, in_progress, approved = result
-                if total_assignments and total_assignments > 0:
-                    message += "**Дополнительная статистика:**\n"
-                    message += f"• Проверено: {approved or 0}\n\n"
-                    
-        except Exception as e:
-            print(f"⚠️ Ошибка SQL запроса в статистике: {e}")
-        finally:
-            if conn:
-                conn.close()
-
+        # Показываем пропущенные задания
+        skipped_list = stats.get('skipped_list', [])
+        if skipped_list:
+            message += "\n**📋 Последние пропущенные задания:**\n"
+            for skip in skipped_list[:5]:
+                day_num = skip.get('day_number', '')
+                assignment = skip.get('assignment', 'Задание')
+                message += f"• День {day_num}: {assignment[:30]}...\n"
     
     # Клавиатура
     keyboard = [
@@ -4976,6 +4827,7 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
+    # Отправка
     try:
         await update.message.reply_text(
             message,
@@ -4983,8 +4835,8 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode='Markdown'
         )
     except Exception as e:
-        print(f"🚨 Ошибка отправки сообщения со статистикой: {e}")
-        safe_message = message.replace('*', '').replace('_', '')
+        print(f"🚨 Ошибка отправки статистики: {e}")
+        safe_message = message.replace('*', '').replace('_', '').replace('`', '')
         await update.message.reply_text(
             safe_message[:4000],
             reply_markup=reply_markup
@@ -4997,14 +4849,21 @@ async def manage_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
+    # ★★★ ПОЛУЧАЕМ ПОЛЬЗОВАТЕЛЕЙ С ТИПАМИ ДОСТУПА ★★★
     cursor.execute('''
-        SELECT u.user_id, 
-               COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
-               COUNT(uaa.arc_id) as arc_count
+        SELECT 
+            u.user_id, 
+            COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+            uaa.access_type
         FROM users u
-        LEFT JOIN user_arc_access uaa ON u.user_id = uaa.user_id
+        LEFT JOIN user_arc_access uaa ON u.user_id = uaa.user_id AND uaa.company_arc_id IS NOT NULL
         GROUP BY u.user_id
         ORDER BY 
+            CASE 
+                WHEN uaa.access_type = 'paid' THEN 1
+                WHEN uaa.access_type = 'trial' THEN 2
+                ELSE 3
+            END,
             CASE WHEN u.fio IS NOT NULL THEN 1 ELSE 2 END,
             u.user_id
         LIMIT 50
@@ -5018,11 +4877,19 @@ async def manage_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     keyboard = []
-    for user_id, display_name, arc_count in users:
+    for user_id, display_name, access_type in users:
         if len(display_name) > 25:
             display_name = display_name[:22] + "..."
         
-        btn_text = f"👤 {display_name} ({arc_count})"
+        # Определяем текст статуса
+        if access_type == 'paid':
+            status_text = "полный"
+        elif access_type == 'trial':
+            status_text = "пробный"
+        else:
+            status_text = "нет"
+        
+        btn_text = f"👤 {display_name} ({status_text})"
         keyboard.append([btn_text])
         
         if 'access_user_map' not in context.user_data:
@@ -5034,7 +4901,11 @@ async def manage_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "🔧 **Управление доступом**\n\n"
-        "Выберите пользователя (число в скобках - кол-во доступов):",
+        "Выберите пользователя:\n"
+        "• (полный) - полный доступ к тренингу\n"
+        "• (пробный) - пробный доступ на 3 дня\n"
+        "• (нет) - нет доступа\n\n"
+        "После выбора откроется панель управления доступом.",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -5060,23 +4931,47 @@ async def show_user_arcs_access(update: Update, context: ContextTypes.DEFAULT_TY
     fio, username = user_info if user_info else (None, None)
     display_name = fio if fio else (username if username else f"ID: {user_id}")
     
+    # ★★★ ПОЛУЧАЕМ ТИП ДОСТУПА ★★★
     cursor.execute('''
-        SELECT a.arc_id, a.title, 
-               CASE WHEN uaa.user_id IS NOT NULL THEN 1 ELSE 0 END as has_access
-        FROM arcs a
-        LEFT JOIN user_arc_access uaa ON a.arc_id = uaa.arc_id AND uaa.user_id = ?
-        WHERE a.arc_id > 0
-        ORDER BY a.arc_id
+        SELECT access_type FROM user_arc_access 
+        WHERE user_id = ? AND company_arc_id IS NOT NULL
+        ORDER BY 
+            CASE access_type 
+                WHEN 'paid' THEN 1 
+                WHEN 'trial' THEN 2 
+                ELSE 3 
+            END
+        LIMIT 1
     ''', (user_id,))
     
-    arcs = cursor.fetchall()
+    access_result = cursor.fetchone()
     
+    if access_result:
+        access_type = access_result[0]
+        has_access = True
+        if access_type == 'paid':
+            access_display = "✅ Полный доступ"
+            access_short = "✅"
+        elif access_type == 'trial':
+            access_display = "🎁 Пробный доступ"
+            access_short = "🎁"
+        else:
+            access_display = "✅ Доступ есть"
+            access_short = "✅"
+    else:
+        has_access = False
+        access_type = None
+        access_display = "❌ Нет доступа"
+        access_short = "❌"
+    
+    # Получаем список пользователей с их типами доступа
     cursor.execute('''
-        SELECT u.user_id, 
-               COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
-               COUNT(uaa.arc_id) as arc_count
+        SELECT 
+            u.user_id, 
+            COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+            uaa.access_type
         FROM users u
-        LEFT JOIN user_arc_access uaa ON u.user_id = uaa.user_id
+        LEFT JOIN user_arc_access uaa ON u.user_id = uaa.user_id AND uaa.company_arc_id IS NOT NULL
         GROUP BY u.user_id
         ORDER BY 
             CASE WHEN u.fio IS NOT NULL THEN 1 ELSE 2 END,
@@ -5087,35 +4982,47 @@ async def show_user_arcs_access(update: Update, context: ContextTypes.DEFAULT_TY
     users = cursor.fetchall()
     conn.close()
     
+    # Создаем inline клавиатуру
     inline_keyboard = []
-    row = []
     
-    for i, (arc_id, arc_title, has_access) in enumerate(arcs):
-        emoji = "✅" if has_access else "❌"
-        short_title = f"Часть {arc_id}"
-        button_text = f"{emoji} {short_title}"
-        callback_data = f"access_toggle_{user_id}_{arc_id}_{1 if has_access else 0}"
-        
-        row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
-        
-        if len(row) == 4 or i == len(arcs) - 1:
-            inline_keyboard.append(row)
-            row = []
+    # Кнопка переключения доступа
+    current_state = "1" if has_access else "0"
+    button_text = f"{access_display}"
+    callback_data = f"access_toggle_{user_id}_1_{current_state}_{access_type if access_type else 'none'}"
+    inline_keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    
+    # Кнопки быстрых действий
+    if has_access and access_type == 'trial':
+        inline_keyboard.append([
+            InlineKeyboardButton("💰 Апгрейд до полного", callback_data=f"access_upgrade_{user_id}_paid")
+        ])
     
     inline_keyboard.append([
-        InlineKeyboardButton("✅ Дать все доступы", callback_data=f"access_all_{user_id}_1"),
-        InlineKeyboardButton("❌ Забрать все", callback_data=f"access_all_{user_id}_0")
+        InlineKeyboardButton("✅ Дать полный доступ", callback_data=f"access_grant_{user_id}_paid"),
+        InlineKeyboardButton("🎁 Дать пробный", callback_data=f"access_grant_{user_id}_trial")
+    ])
+    
+    inline_keyboard.append([
+        InlineKeyboardButton("❌ Забрать доступ", callback_data=f"access_revoke_{user_id}")
     ])
     
     inline_markup = InlineKeyboardMarkup(inline_keyboard)
     
+    # Создаем клавиатуру выбора пользователя
     reply_keyboard = []
-    for u_id, u_name, u_arc_count in users:
+    for u_id, u_name, u_access_type in users:
         if len(u_name) > 25:
             u_name = u_name[:22] + "..."
         
+        if u_access_type == 'paid':
+            user_access_emoji = "✅"
+        elif u_access_type == 'trial':
+            user_access_emoji = "🎁"
+        else:
+            user_access_emoji = "❌"
+            
         prefix = "👉 " if u_id == user_id else "👤 "
-        btn_text = f"{prefix}{u_name} ({u_arc_count})"
+        btn_text = f"{prefix}{u_name} ({user_access_emoji})"
         reply_keyboard.append([btn_text])
         
         if 'access_user_map' not in context.user_data:
@@ -5125,16 +5032,14 @@ async def show_user_arcs_access(update: Update, context: ContextTypes.DEFAULT_TY
     reply_keyboard.append(["🔙 В главное меню"])
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
-    total_arcs = len(arcs)
-    accessed_arcs = sum(1 for _, _, has_access in arcs if has_access)
-    
     message = f"🔧 **Управление доступом**\n\n"
     message += f"👉 **Текущий пользователь:** {escape_markdown(display_name, version=2)}\n"
-    message += f"📊 Доступов: {accessed_arcs}/{total_arcs}\n\n"
-    message += "**Быстрое управление разделами:**\n"
-    message += "• Нажмите на кнопку части тренинга чтобы переключить доступ ✅/❌\n"
-    message += "• '✅ Дать все' - доступ ко всем частям тренинга\n"
-    message += "• '❌ Забрать все' - удалить все доступы\n\n"
+    message += f"📊 **Статус:** {access_display}\n\n"
+    message += "**Управление:**\n"
+    message += "• Нажмите на верхнюю кнопку чтобы переключить доступ\n"
+    message += "• '✅ Дать полный доступ' - полный доступ (56 дней)\n"
+    message += "• '🎁 Дать пробный' - пробный на 3 дня\n"
+    message += "• '❌ Забрать доступ' - удалить доступ\n\n"
     message += "**Выберите другого пользователя из списка ниже:**"
     
     await update.message.reply_text(
@@ -5145,131 +5050,95 @@ async def show_user_arcs_access(update: Update, context: ContextTypes.DEFAULT_TY
     
     await update.message.reply_text(
         "👥 **Список пользователей:**\n"
-        "(👉 - текущий выбранный)",
+        "(👉 - текущий выбранный, ✅ - полный, 🎁 - пробный, ❌ - нет доступа)",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
 async def handle_access_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает нажатия inline-кнопок управления доступом"""
+    """Обрабатывает нажатия inline-кнопок управления доступом - НОВАЯ ВЕРСИЯ"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
+    print(f"🔍 DEBUG handle_access_callback: {data}")
     
-    if data.startswith("access_toggle_"):
+    # ★★★ ПОЛУЧАЕМ COMPANY_ARC_ID ПОЛЬЗОВАТЕЛЯ ★★★
+    def get_user_company_arc_id(user_id):
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ca.company_arc_id
+            FROM user_companies uc
+            JOIN company_arcs ca ON uc.company_id = ca.company_id
+            WHERE uc.user_id = ? AND uc.is_active = 1
+            LIMIT 1
+        ''', (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else None
+    
+    # ★★★ ВЫДАТЬ КОНКРЕТНЫЙ ТИП ДОСТУПА ★★★
+    if data.startswith("access_grant_"):
         parts = data.split("_")
         user_id = int(parts[2])
-        arc_id = int(parts[3])
-        current_status = int(parts[4])
+        access_type = parts[3]  # 'paid' или 'trial'
         
         from database import grant_arc_access
         
-        if current_status == 1:
-            conn = sqlite3.connect('mentor_bot.db')
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
-                          (user_id, arc_id))
-            conn.commit()
-            conn.close()
-            new_status = 0
-            action = "удален"
-        else:
-            grant_arc_access(user_id, arc_id, 'manual')
-            new_status = 1
-            action = "добавлен"
+        company_arc_id = get_user_company_arc_id(user_id)
         
-        await show_user_arcs_access_callback(query, context, user_id)
-        await query.message.reply_text(f"✅ Доступ к части тренинга {arc_id} {action}!")
+        if company_arc_id:
+            grant_arc_access(user_id, company_arc_id, access_type)
+            
+            if access_type == 'paid':
+                await query.message.reply_text("✅ Полный доступ к тренингу выдан!")
+            elif access_type == 'trial':
+                await query.message.reply_text("🎁 Пробный доступ на 3 дня выдан!")
+        else:
+            await query.message.reply_text("❌ У пользователя нет компании!")
+        
+        # Просто сообщаем об успехе, без обновления страницы
         return
     
-    if data.startswith("access_all_"):
+    # ★★★ АПГРЕЙД С ПРОБНОГО НА ПОЛНЫЙ ★★★
+    if data.startswith("access_upgrade_"):
         parts = data.split("_")
         user_id = int(parts[2])
-        action = int(parts[3])
+        
+        from database import grant_arc_access
+        
+        company_arc_id = get_user_company_arc_id(user_id)
+        
+        if company_arc_id:
+            grant_arc_access(user_id, company_arc_id, 'paid')
+            await query.message.reply_text("💰 Доступ апгрейднут с пробного на полный!")
+        else:
+            await query.message.reply_text("❌ У пользователя нет компании!")
+        
+        return
+    
+    # ★★★ ЗАБРАТЬ ВЕСЬ ДОСТУП ★★★
+    if data.startswith("access_revoke_"):
+        parts = data.split("_")
+        user_id = int(parts[2])
         
         conn = sqlite3.connect('mentor_bot.db')
         cursor = conn.cursor()
         
-        if action == 1:
-            cursor.execute('SELECT arc_id FROM arcs WHERE arc_id > 0')
-            arcs = cursor.fetchall()
-            
-            for (arc_id,) in arcs:
-                cursor.execute('''
-                    INSERT OR IGNORE INTO user_arc_access (user_id, arc_id, access_type)
-                    VALUES (?, ?, 'manual')
-                ''', (user_id, arc_id))
-            
-            conn.commit()
-            await query.message.reply_text("✅ Выдан доступ ко всем частям тренинга!")
-        else:
-            cursor.execute('DELETE FROM user_arc_access WHERE user_id = ?', (user_id,))
-            conn.commit()
-            await query.message.reply_text("❌ Все доступы удалены!")
+        cursor.execute('''
+            DELETE FROM user_arc_access 
+            WHERE user_id = ?
+        ''', (user_id,))
         
+        conn.commit()
         conn.close()
         
-        await show_user_arcs_access_callback(query, context, user_id)
+        await query.message.reply_text("❌ Весь доступ к тренингу удален!")
         return
-
-async def show_user_arcs_access_callback(query, context, user_id):
-    """Обновляет сообщение с inline-клавиатурой"""
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
     
-    cursor.execute('SELECT fio, username FROM users WHERE user_id = ?', (user_id,))
-    user_info = cursor.fetchone()
-    fio, username = user_info if user_info else (None, None)
-    display_name = fio if fio else (username if username else f"ID: {user_id}")
-    
-    cursor.execute('''
-        SELECT a.arc_id, a.title, 
-               CASE WHEN uaa.user_id IS NOT NULL THEN 1 ELSE 0 END as has_access
-        FROM arcs a
-        LEFT JOIN user_arc_access uaa ON a.arc_id = uaa.arc_id AND uaa.user_id = ?
-        WHERE a.arc_id > 0
-        ORDER BY a.arc_id
-    ''', (user_id,))
-    
-    arcs = cursor.fetchall()
-    conn.close()
-    
-    keyboard = []
-    row = []
-    
-    for i, (arc_id, arc_title, has_access) in enumerate(arcs):
-        emoji = "✅" if has_access else "❌"
-        short_title = f"Д{arc_id}"
-        button_text = f"{emoji} {short_title}"
-        callback_data = f"access_toggle_{user_id}_{arc_id}_{1 if has_access else 0}"
-        
-        row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
-        
-        if len(row) == 4 or i == len(arcs) - 1:
-            keyboard.append(row)
-            row = []
-    
-    keyboard.append([
-        InlineKeyboardButton("✅ Дать все доступы", callback_data=f"access_all_{user_id}_1"),
-        InlineKeyboardButton("❌ Забрать все", callback_data=f"access_all_{user_id}_0")
-    ])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    total_arcs = len(arcs)
-    accessed_arcs = sum(1 for _, _, has_access in arcs if has_access)
-    
-    message = f"🔧 **Управление доступом**\n\n"
-    message += f"👤 **Пользователь:** {display_name}\n"
-    message += f"📊 Доступов: {accessed_arcs}/{total_arcs}\n\n"
-    message += "**Быстрое управление:**\n"
-    message += "• Нажмите на кнопку раздела чтобы переключить доступ ✅/❌\n"
-    message += "• '✅ Дать все' - доступ ко всем разделам\n"
-    message += "• '❌ Забрать все' - удалить все доступы\n\n"
-    message += f"✅ - доступ есть\n❌ - доступа нет"
-    
-    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    # ★★★ УДАЛЯЕМ ВСЕ СТАРЫЕ ОБРАБОТЧИКИ ★★★
+    # access_toggle_, access_all_ - больше не используем
 
 async def show_users_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает список участников для просмотра статистики (админ) - ИСПРАВЛЕННАЯ"""
@@ -5464,29 +5333,29 @@ async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAUL
     message = f"👤 **{user_fio}**\n\n"
     
     if 'error' in stats:
-        message += f"📚 **{display_title}**\n\n"
-        message += f"🏢 **Компания:** {company_name}\n"
+        message += f"**{display_title}**\n\n"
+        message += f"**Компания:** {company_name}\n"
         if company_start_date:
-            message += f"📅 **Дата начала:** {company_start_date}\n"
+            message += f"**Дата начала:** {company_start_date}\n"
         message += f"\n⚠️ **Ошибка получения статистики:** {stats['error']}"
     else:
-        message += f"📚 **{display_title}**\n\n"
+        message += f"**{display_title}**\n\n"
         
         if company_name and company_name != "Неизвестно":
-            message += f"🏢 **Компания:** {company_name}\n"
+            message += f"**Компания:** {company_name}\n"
         
         if stats.get('actual_start_date'):
-            message += f"📅 **Дата начала:** {stats['actual_start_date']}\n"
+            message += f"**Дата начала:** {stats['actual_start_date']}\n"
         elif stats.get('start_date'):
-            message += f"📅 **Дата начала:** {stats['start_date']}\n"
+            message += f"**Дата начала:** {stats['start_date']}\n"
         
         # Рассчитываем количество дней участия
         if stats.get('start_date') and stats.get('current_day'):
-            message += f"📆 **Участвовал в тренинге:** {min(stats['current_day'], 56)} дней\n\n"
+            message += f"**Участвовал в тренинге:** {min(stats['current_day'], 56)} дней\n\n"
         else:
-            message += f"📆 **Участвовал в тренинге:** {stats.get('current_day', 1)} дней\n\n"
+            message += f"**Участвовал в тренинге:** {stats.get('current_day', 1)} дней\n\n"
         
-        message += f"📊 **Выполнено заданий:** {stats.get('completed_assignments', 0)} из {stats.get('total_assignments', 168)}\n"
+        message += f"**Выполнено заданий:** {stats.get('completed_assignments', 0)} из {stats.get('total_assignments', 168)}\n"
         
         # Рассчитываем корректный процент
         if stats.get('total_assignments', 0) > 0:
@@ -5494,22 +5363,22 @@ async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAUL
         else:
             completion_rate = 0
         
-        message += f"📈 **Прогресс:** {completion_rate}%\n"
+        message += f"**Прогресс:** {completion_rate}%\n"
         
         if stats.get('submitted_assignments', 0) > 0:
-            message += f"🟡 **На проверке:** {stats.get('submitted_assignments', 0)}\n"
+            message += f"**На проверке:** {stats.get('submitted_assignments', 0)}\n"
         
-        message += f"❌ **Пропущено:** {stats.get('skipped_assignments', 0)}\n"
-        message += f"🔥 **Серия без пропусков:** {stats.get('streak_days', 0)} дней\n"
+        message += f"**Пропущено:** {stats.get('skipped_assignments', 0)}\n"
+        message += f"**Серия без пропусков:** {stats.get('streak_days', 0)} дней\n"
         
         if stats.get('current_day'):
-            message += f"📅 **Текущий день тренинга:** {stats.get('current_day')} из 56\n"
+            message += f"**Текущий день тренинга:** {stats.get('current_day')} из 56\n"
         
         # Показываем тип доступа
         if access_type == 'trial':
-            message += f"🎁 **Тип доступа:** Пробный (3 дня)\n"
+            message += f"**Тип доступа:** Пробный (3 дня)\n"
         else:
-            message += f"💰 **Тип доступа:** Полный (56 дней)\n"
+            message += f"**Тип доступа:** Полный (56 дней)\n"
         
         # Показываем последние пропущенные задания
         if stats.get('skipped_list') and len(stats['skipped_list']) > 0:
@@ -5521,7 +5390,6 @@ async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAUL
     
     # Создаем клавиатуру
     keyboard = [
-        ["📊 Посмотреть другой марафон этого участника"],
         ["👤 Выбрать другого участника"],
         ["👨‍🏫 Проверка заданий"]
     ]
@@ -7556,73 +7424,15 @@ async def show_feedback_parts(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def show_feedback_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает выбор типа ответов - ОБНОВЛЕННАЯ"""
+    """Показывает выбор типа ответов - ИСПРАВЛЕННАЯ ДЛЯ КОМПАНИЙ"""
     context.user_data['current_section'] = 'feedback_type'
     user_id = update.message.from_user.id
     
-    # ★★ ВАЖНО: Получаем текст кнопки из update
-    arc_text = update.message.text
-    print(f"🔍 show_feedback_type: текст кнопки='{arc_text}'")
+    # ★★★ ИСПРАВЛЕНИЕ: Не ищем в arcs, используем фиксированный arc_id=1 для всех компаний ★★★
+    arc_id = 1
+    arc_title = "Регулярный менеджмент(8 недель)"
     
-    # ★★ ВАЖНО: Проверяем что это не кнопка типа ответов
-    if arc_text.startswith("🟡 Новые ответы") or arc_text.startswith("✅ Завершенные задания"):
-        print(f"⚠️ Это кнопка типа ответов, пропускаем парсинг")
-        # Это кнопка типа ответов - обрабатываем в show_feedback_list
-        arc_id = context.user_data.get('current_feedback_arc')
-        if arc_id:
-            await show_feedback_list(update, context)
-        else:
-            await update.message.reply_text("❌ Ошибка: часть не выбрана")
-        return
-    
-    # Очищаем текст от эмодзи и счетчиков
-    import re
-    
-    # Убираем эмодзи 🏆 или 📚
-    clean_title = arc_text.replace("🏆 ", "").replace("📚 ", "")
-    
-    # Убираем 🟡(X) или (X)
-    clean_title = re.sub(r'\s*🟡\(\d+\)', '', clean_title)
-    clean_title = re.sub(r'\s*\(\d+\)', '', clean_title)
-    
-    clean_title = clean_title.strip()
-    
-    print(f"🔍 Очищенное название: '{clean_title}'")
-    
-    # Ищем часть в БД
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT arc_id, title FROM arcs WHERE title = ?', (clean_title,))
-    result = cursor.fetchone()
-    
-    if not result and "Часть" in clean_title:
-        match = re.search(r'Часть\s*(\d+)', clean_title)
-        if match:
-            part_num = match.group(1)
-            cursor.execute('SELECT arc_id, title FROM arcs WHERE title LIKE ?', (f'%{part_num}%',))
-            result = cursor.fetchone()
-    
-    if not result:
-        conn.close()
-        
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT arc_id, title FROM arcs WHERE arc_id > 0')
-        all_arcs = cursor.fetchall()
-        conn.close()
-        
-        debug_msg = f"❌ Часть '{clean_title}' не найдена.\n\n**Доступные части:**\n"
-        for arc_id, title in all_arcs:
-            debug_msg += f"• {title}\n"
-        
-        await update.message.reply_text(debug_msg, parse_mode='Markdown')
-        return
-    
-    arc_id, arc_title = result
-    conn.close()
-    
-    print(f"✅ Найдена часть: ID={arc_id}, название='{arc_title}'")
+    print(f"✅ Использую фиксированную часть: ID={arc_id}, название='{arc_title}'")
     
     # Сохраняем в контекст
     context.user_data['current_feedback_arc'] = arc_id
@@ -7632,14 +7442,14 @@ async def show_feedback_type(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from database import get_feedback_counts
     new_count, completed_count = get_feedback_counts(user_id, arc_id)
     
-    print(f"📊 Статистика для части {arc_id}: новых={new_count}, завершенных={completed_count}")
+    print(f"📊 Статистика: новых={new_count}, завершенных={completed_count}")
     
     # Формируем сообщение
     message = f"💬 **Ответ психолога**\n\n"
     message += f"**Часть:** {arc_title}\n\n"
     
     if new_count == 0 and completed_count == 0:
-        message += "📭 **В этой части пока нет проверенных заданий.**\n\n"
+        message += "📭 **Пока нет проверенных заданий.**\n\n"
     else:
         message += f"📊 **Статистика ответов:**\n"
         if new_count > 0:
@@ -11889,6 +11699,7 @@ async def check_payment_callback(update: Update, context: ContextTypes.DEFAULT_T
             traceback.print_exc()
             await query.answer(error_msg, show_alert=True)
 
+
 async def debug_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отладка данных теста"""
     test_data = context.user_data.get('current_test', {})
@@ -11910,6 +11721,442 @@ async def debug_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"  '{text}' → {option}\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
+
+# ========== НОВЫЕ ФУНКЦИИ ДЛЯ ПРОФИЛЯ КОМПАНИИ ==========
+
+async def company_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню профиля компании"""
+    user_id = update.message.from_user.id
+    context.user_data['current_section'] = 'company_profile'
+    
+    from database import get_user_company, get_company_statistics_full
+    
+    # Проверяем компанию пользователя
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text(
+            "❌ **Вы не состоите в компании!**",
+            parse_mode='Markdown'
+        )
+        return
+    
+    company_id = user_company['company_id']
+    
+    # Получаем полную статистику компании
+    stats = get_company_statistics_full(company_id)
+    if not stats:
+        await update.message.reply_text(
+            "❌ **Ошибка загрузки данных компании**",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Формируем сообщение
+    message = f"🏢 **Профиль компании: {stats['name']}**\n\n"
+    message += f"📅 **Старт тренинга:** {stats['actual_start_date']}\n"
+    message += f"👥 **Участников:** {stats['total_users']}\n"
+    message += f"📊 **Средний прогресс:** {stats['avg_completion']}%\n\n"
+    
+    if stats['tg_group_link']:
+        message += f"🔗 **Telegram группа:** [Перейти]({stats['tg_group_link']})\n\n"
+    
+    message += f"**🔑 Ключ компании:** `{stats['join_key']}`\n\n"
+    
+    # Топ-3 участника
+    if stats['top_users']:
+        message += "🏆 **Топ-3 участника:**\n"
+        for i, user in enumerate(stats['top_users'], 1):
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
+            message += f"{medal} {user['name']} — {user['completion_rate']}% ({user['completed']}/{user['total']})\n"
+        message += "\n"
+    
+    # Описание компании
+    message += "📝 **Описание компании:**\n"
+    message += f"{stats['description']}\n\n"
+    
+    # Список задач
+    if stats['tasks']:
+        message += "✅ **Список задач компании:**\n"
+        for task in stats['tasks']:
+            message += f"{task['number']}. {task['text']}\n"
+    else:
+        message += "📋 **Список задач:** пока пусто\n"
+    
+    # Клавиатура
+    keyboard = [
+        ["📋 Список участников"],
+        ["📊 Результаты компании"],
+        ["📝 Список задач"],
+        ["📝 Изменить описание"],
+        ["👥 Выбор напарника (заглушка)"],
+        ["🔙 В главное меню"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown',
+        disable_web_page_preview=True
+    )
+
+
+async def start_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс ввода должности"""
+    context.user_data['waiting_for_position'] = True
+    
+    await update.message.reply_text(
+        "📝 **Введите вашу должность в компании:**\n\n"
+        "Например: 'HR-менеджер', 'Team Lead', 'Стажер' и т.д.\n\n"
+        "🔙 Чтобы отменить, нажмите кнопку 'Назад'",
+        parse_mode='Markdown'
+    )
+
+
+async def process_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод должности"""
+    user_id = update.message.from_user.id
+    position = update.message.text.strip()
+    
+    from database import get_user_company, add_user_position
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Ошибка: компания не найдена")
+        return
+    
+    if len(position) < 2:
+        await update.message.reply_text(
+            "❌ **Название должности слишком короткое!**\n\n"
+            "Минимум 2 символа. Попробуйте еще раз:",
+            parse_mode='Markdown'
+        )
+        return
+    
+    if len(position) > 100:
+        await update.message.reply_text(
+            "❌ **Название должности слишком длинное!**\n\n"
+            "Максимум 100 символов. Попробуйте еще раз:",
+            parse_mode='Markdown'
+        )
+        return
+    
+    success = add_user_position(user_id, user_company['company_id'], position)
+    
+    if success:
+        context.user_data.pop('waiting_for_position', None)
+        await update.message.reply_text(
+            f"✅ **Должность сохранена!**\n\n"
+            f"**Ваша должность:** {position}",
+            parse_mode='Markdown'
+        )
+        await profile_menu(update, context)
+    else:
+        await update.message.reply_text(
+            "❌ **Ошибка сохранения должности.**\n\n"
+            "Попробуйте позже.",
+            parse_mode='Markdown'
+        )
+
+
+async def show_company_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список участников компании с должностями и статистикой"""
+    user_id = update.message.from_user.id
+    
+    from database import get_user_company, get_company_users_with_stats
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Вы не состоите в компании")
+        return
+    
+    users = get_company_users_with_stats(user_company['company_id'])
+    
+    if not users:
+        await update.message.reply_text("📋 В компании пока нет участников")
+        return
+    
+    message = f"📋 **Список участников компании {user_company['name']}**\n\n"
+    
+    for i, user in enumerate(users, 1):
+        message += f"{i}. **{user['name']}**\n"
+        message += f"   📌 Должность: {user['position']}\n"
+        message += f"   📅 Прогресс: {user['completion_rate']}% ({user['completed']}/{user['total']})\n"
+        message += f"   🔥 Серия: {user['streak']} дней\n\n"
+        
+        # Ограничиваем длину сообщения
+        if len(message) > 3500:
+            message += "... и еще несколько участников"
+            break
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+
+async def start_company_description_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс редактирования описания компании"""
+    context.user_data['waiting_for_company_description'] = True
+    
+    await update.message.reply_text(
+        "📝 **Введите новое описание компании:**\n\n"
+        "Вы можете указать любую информацию:\n"
+        "• Ссылки на документы\n"
+        "• Правила компании\n"
+        "• Важные объявления\n"
+        "• Контакты\n\n"
+        "🔙 Чтобы отменить, нажмите кнопку 'Назад'",
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup([["🔙 Отменить"]], resize_keyboard=True)
+    )
+
+
+async def process_company_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод нового описания компании"""
+    user_id = update.message.from_user.id
+    description = update.message.text.strip()
+    
+    from database import get_user_company, update_company_description
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Ошибка: компания не найдена")
+        return
+    
+    if len(description) < 10:
+        await update.message.reply_text(
+            "❌ **Описание слишком короткое!**\n\n"
+            "Минимум 10 символов. Попробуйте еще раз:",
+            parse_mode='Markdown'
+        )
+        return
+    
+    success = update_company_description(user_company['company_id'], description)
+    
+    if success:
+        context.user_data.pop('waiting_for_company_description', None)
+        await update.message.reply_text(
+            "✅ **Описание компании обновлено!**",
+            parse_mode='Markdown'
+        )
+        await company_profile_menu(update, context)
+    else:
+        await update.message.reply_text(
+            "❌ **Ошибка сохранения описания.**\n\n"
+            "Попробуйте позже.",
+            parse_mode='Markdown'
+        )
+
+
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ СО СПИСКОМ ЗАДАЧ ==========
+
+async def company_tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Меню управления задачами компании"""
+    context.user_data['current_section'] = 'company_tasks'
+    
+    user_id = update.message.from_user.id
+    from database import get_user_company, get_company_tasks, get_company_tasks_count
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Вы не состоите в компании")
+        return
+    
+    company_id = user_company['company_id']
+    tasks = get_company_tasks(company_id)
+    tasks_count = len(tasks)
+    
+    message = f"📝 **Список задач компании {user_company['name']}**\n\n"
+    
+    if tasks:
+        for task in tasks:
+            message += f"{task['number']}. {task['text']}\n"
+    else:
+        message += "У компании пока нет задач.\n\n"
+    
+    message += f"\n**Всего задач:** {tasks_count}"
+    
+    keyboard = [
+        ["➕ Добавить задачу"]
+    ]
+    
+    if tasks_count > 0:
+        keyboard.append(["❌ Удалить задачу"])
+    
+    keyboard.append(["🔙 Назад в профиль компании"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+
+async def start_add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс добавления задачи"""
+    context.user_data['waiting_for_task_text'] = True
+    
+    await update.message.reply_text(
+        "📝 **Введите текст новой задачи:**\n\n"
+        "Например: 'Подготовить отчет по итогам недели'\n\n"
+        "🔙 Чтобы отменить, нажмите кнопку 'Назад'",
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup([["🔙 Отменить"]], resize_keyboard=True)
+    )
+
+
+async def process_add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод текста новой задачи"""
+    user_id = update.message.from_user.id
+    task_text = update.message.text.strip()
+    
+    from database import get_user_company, add_company_task
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Ошибка: компания не найдена")
+        return
+    
+    if len(task_text) < 3:
+        await update.message.reply_text(
+            "❌ **Текст задачи слишком короткий!**\n\n"
+            "Минимум 3 символа. Попробуйте еще раз:",
+            parse_mode='Markdown'
+        )
+        return
+    
+    task_number = add_company_task(user_company['company_id'], task_text, user_id)
+    
+    if task_number:
+        context.user_data.pop('waiting_for_task_text', None)
+        await update.message.reply_text(
+            f"✅ **Задача #{task_number} добавлена!**\n\n"
+            f"{task_text}",
+            parse_mode='Markdown'
+        )
+        await company_tasks_menu(update, context)
+    else:
+        await update.message.reply_text(
+            "❌ **Ошибка добавления задачи.**\n\n"
+            "Попробуйте позже.",
+            parse_mode='Markdown'
+        )
+
+
+async def start_delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс удаления задачи - показывает кнопки с номерами"""
+    user_id = update.message.from_user.id
+    
+    from database import get_user_company, get_company_tasks
+    
+    user_company = get_user_company(user_id)
+    if not user_company:
+        await update.message.reply_text("❌ Вы не состоите в компании")
+        return
+    
+    tasks = get_company_tasks(user_company['company_id'])
+    
+    if not tasks:
+        await update.message.reply_text("📋 У компании нет задач для удаления")
+        await company_tasks_menu(update, context)
+        return
+    
+    # Создаем кнопки с номерами задач
+    keyboard = []
+    row = []
+    
+    for i, task in enumerate(tasks, 1):
+        btn_text = f"❌ Задача {task['number']}"
+        row.append(btn_text)
+        
+        if len(row) == 3 or i == len(tasks):
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append(["🔙 Отменить"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    message = "🗑 **Выберите номер задачи для удаления:**\n\n"
+    for task in tasks:
+        message += f"{task['number']}. {task['text']}\n"
+    
+    context.user_data['waiting_for_task_delete'] = True
+    context.user_data['current_tasks'] = tasks
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+
+async def process_delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор задачи для удаления"""
+    text = update.message.text
+    
+    if text == "🔙 Отменить":
+        context.user_data.pop('waiting_for_task_delete', None)
+        context.user_data.pop('current_tasks', None)
+        await company_tasks_menu(update, context)
+        return
+    
+    if text.startswith("❌ Задача "):
+        try:
+            task_number = int(text.replace("❌ Задача ", ""))
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат")
+            return
+        
+        user_id = update.message.from_user.id
+        from database import get_user_company, delete_company_task
+        
+        user_company = get_user_company(user_id)
+        if not user_company:
+            await update.message.reply_text("❌ Ошибка: компания не найдена")
+            return
+        
+        success = delete_company_task(user_company['company_id'], task_number)
+        
+        if success:
+            context.user_data.pop('waiting_for_task_delete', None)
+            context.user_data.pop('current_tasks', None)
+            
+            await update.message.reply_text(
+                f"✅ **Задача #{task_number} удалена!**",
+                parse_mode='Markdown'
+            )
+            await company_tasks_menu(update, context)
+        else:
+            await update.message.reply_text(
+                f"❌ **Ошибка удаления задачи #{task_number}**",
+                parse_mode='Markdown'
+            )
+
+async def partner_selection_stub(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Заглушка для функции выбора напарника"""
+    await update.message.reply_text(
+        "👥 **Функция 'Выбор напарника' находится в разработке**\n\n"
+        "Здесь вы сможете выбрать партнера для совместного выполнения заданий и отслеживания прогресса друг друга.\n\n"
+        "Релиз планируется в ближайшее время!",
+        parse_mode='Markdown'
+    )
+    await company_profile_menu(update, context)
+
+
+async def show_company_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Заглушка для результатов компании"""
+    await update.message.reply_text(
+        "📊 **Раздел 'Результаты компании' находится в разработке**\n\n"
+        "Здесь будет отображаться полная статистика по всем участникам компании:\n"
+        "• Общий прогресс компании\n"
+        "• Динамика выполнения заданий\n"
+        "• Графики и диаграммы\n\n"
+        "Релиз планируется в ближайшее время!",
+        parse_mode='Markdown'
+    )
+    await company_profile_menu(update, context)
 
 
 def main():

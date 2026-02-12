@@ -248,41 +248,6 @@ def init_db():
     ''')
     print("✅ Таблица company_arcs создана/проверена")
 
-    # ★★★ ПРОВЕРЯЕМ И СОЗДАЕМ company_arc_id = 1 ★★★
-    try:
-        # Проверяем есть ли запись с company_arc_id = 1
-        cursor.execute('SELECT 1 FROM company_arcs WHERE company_arc_id = 1')
-        if not cursor.fetchone():
-            print("🔧 Создаем company_arc_id = 1...")
-            
-            # Сначала проверяем есть ли компания с ID = 1
-            cursor.execute('SELECT 1 FROM companies WHERE company_id = 1')
-            if not cursor.fetchone():
-                # Создаем тестовую компанию
-                cursor.execute('''
-                    INSERT INTO companies 
-                    (company_id, name, join_key, start_date, price)
-                    VALUES (1, 'Тестовая Компания', 'TESTKEY', '2026-02-01', 1000)
-                ''')
-                print("✅ Тестовая компания создана")
-            
-            # Создаем company_arc с ID = 1
-            cursor.execute('''
-                INSERT INTO company_arcs 
-                (company_arc_id, company_id, arc_id, actual_start_date, actual_end_date)
-                VALUES (1, 1, 1, '2026-02-01', '2026-04-01')
-            ''')
-            print("✅ company_arc_id = 1 создан")
-            
-            conn.commit()
-        else:
-            print("✅ company_arc_id = 1 уже существует")
-            
-    except Exception as e:
-        print(f"⚠️ Ошибка создания company_arc_id = 1: {e}")
-        conn.rollback()
-    
-    # ★★★ ПОЛЬЗОВАТЕЛИ ★★★
     
     # Пользователи
     cursor.execute('''
@@ -372,30 +337,50 @@ def init_db():
     ''')
     print("✅ Таблица assignments создана/проверена")
     
-    # ★★★ ПЛАТЕЖИ ★★★
-    
-    # Платежи
+    # ★★★ ПЛАТЕЖИ - ПРАВИЛЬНАЯ СТРУКТУРА С company_arc_id ★★★
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            arc_id INTEGER,           -- ★ СТАРАЯ КОЛОНКА для совместимости
-            company_arc_id INTEGER,   -- ★ НОВАЯ КОЛОНКА для компаний
+            company_arc_id INTEGER NOT NULL,
             amount REAL NOT NULL,
             status TEXT DEFAULT 'pending',
             yookassa_payment_id TEXT UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            completed_at TIMESTAMP,
-            metadata TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(user_id),
-            FOREIGN KEY (arc_id) REFERENCES arcs(arc_id),
-            FOREIGN KEY (company_arc_id) REFERENCES company_arcs(company_arc_id),
-            CHECK (arc_id IS NOT NULL OR company_arc_id IS NOT NULL)  -- Хотя бы одна заполнена
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     print("✅ Таблица payments создана/проверена")
-    
-    # ★★★ ПРОГРЕСС И СТАТИСТИКА ★★★
+
+    # НЕ УДАЛЯЕМ старую таблицу, а ПЕРЕСОЗДАЕМ с правильной структурой
+    try:
+        # Проверяем структуру
+        cursor.execute("PRAGMA table_info(payments)")
+        columns = cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        # Если нет company_arc_id - пересоздаем таблицу
+        if 'company_arc_id' not in column_names:
+            print("🔧 Пересоздаем таблицу payments с правильной структурой...")
+            
+            # Удаляем старую таблицу
+            cursor.execute("DROP TABLE IF EXISTS payments")
+            
+            # Создаем новую с правильной структурой
+            cursor.execute('''
+                CREATE TABLE payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    company_arc_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    yookassa_payment_id TEXT UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            print("✅ Таблица payments пересоздана с company_arc_id")
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка при проверке payments: {e}")
     
     # Прогресс пользователей
     cursor.execute('''
@@ -569,6 +554,61 @@ def init_db():
             VALUES (1, 1, 'Регулярный менеджмент(8 недель)', 1, 0, '2026-01-01', '2026-12-31')
         ''')
         print("✅ Стандартный тренинг создан")
+
+    # 1. Добавляем колонку description в companies если её нет
+    try:
+        cursor.execute("PRAGMA table_info(companies)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'description' not in columns:
+            print("🔧 Добавляем колонку description в companies...")
+            cursor.execute('ALTER TABLE companies ADD COLUMN description TEXT')
+            print("✅ Колонка description добавлена")
+        
+        if 'company_stats' not in columns:
+            print("🔧 Добавляем колонку company_stats в companies...")
+            cursor.execute('ALTER TABLE companies ADD COLUMN company_stats TEXT DEFAULT "{}"')
+            print("✅ Колонка company_stats добавлена")
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка при добавлении колонок в companies: {e}")
+    
+    # 2. Таблица должностей пользователей в компаниях
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_positions (
+            user_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            position TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, company_id),
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (company_id) REFERENCES companies(company_id)
+        )
+    ''')
+    print("✅ Таблица user_positions создана/проверена")
+    
+    # 3. Таблица списка задач компании
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS company_tasks (
+            task_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            task_number INTEGER NOT NULL,
+            task_text TEXT NOT NULL,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(company_id),
+            FOREIGN KEY (created_by) REFERENCES users(user_id),
+            UNIQUE(company_id, task_number)
+        )
+    ''')
+    print("✅ Таблица company_tasks создана/проверена")
+    
+    # Индекс для быстрого поиска задач по компании
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_company_tasks_company ON company_tasks(company_id)
+    ''')
+    print("✅ Индекс для company_tasks создан")
     
     conn.commit()
     conn.close()
@@ -1423,28 +1463,41 @@ def get_course_arcs(course_title):
     return arcs
 
 def grant_arc_access(user_id, arc_id, access_type='paid'):
-    """Выдает доступ - работает и со старым arc_id и с новым company_arc_id"""
+    """Выдает доступ - ЗАМЕНЯЕТ пробный на полный"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     try:
-        # Определяем что это: arc_id или company_arc_id?
-        # Если arc_id < 1000 - это старая система, иначе - company_arc_id
-        if arc_id < 1000:  # Старый arc_id
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_arc_access 
-                (user_id, arc_id, company_arc_id, access_type)
-                VALUES (?, ?, NULL, ?)
-            ''', (user_id, arc_id, access_type))
-        else:  # Новый company_arc_id
+        # Проверяем, это company_arc_id?
+        cursor.execute('SELECT 1 FROM company_arcs WHERE company_arc_id = ?', (arc_id,))
+        is_company_arc = cursor.fetchone() is not None
+        
+        if is_company_arc:
+            # ★★★ ВАЖНО: Если выдаем полный доступ - удаляем пробный ★★★
+            if access_type == 'paid':
+                cursor.execute('''
+                    DELETE FROM user_arc_access 
+                    WHERE user_id = ? AND company_arc_id = ? AND access_type = 'trial'
+                ''', (user_id, arc_id))
+                print(f"🗑️ Удален пробный доступ пользователя {user_id} перед выдачей полного")
+            
+            # Вставляем новый доступ (заменит существующий если есть)
             cursor.execute('''
                 INSERT OR REPLACE INTO user_arc_access 
                 (user_id, arc_id, company_arc_id, access_type)
                 VALUES (?, NULL, ?, ?)
             ''', (user_id, arc_id, access_type))
+            print(f"✅ Доступ добавлен: user {user_id} -> company_arc {arc_id} (тип: {access_type})")
+        else:
+            # Старый arc_id
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_arc_access 
+                (user_id, arc_id, company_arc_id, access_type)
+                VALUES (?, ?, NULL, ?)
+            ''', (user_id, arc_id, access_type))
+            print(f"✅ Доступ добавлен: user {user_id} -> arc {arc_id} (тип: {access_type})")
         
         conn.commit()
-        print(f"✅ Доступ добавлен: user {user_id} -> ID {arc_id} (тип: {'arc' if arc_id < 1000 else 'company_arc'})")
         return True
     
     except Exception as e:
@@ -2924,127 +2977,27 @@ def mark_notification_sent(user_id, notification_id, day_num=None):
     conn.close()
 
 def save_payment(user_id, company_arc_id, amount, yookassa_id, status='pending'):
-    """Сохраняет платеж за доступ к тренингу компании - С ПОЛНОЙ ОТЛАДКОЙ"""
-    import logging
-    logger = logging.getLogger(__name__)
+    """Сохраняет платеж за доступ к тренингу компании - УПРОЩЕННАЯ ВЕРСИЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
     
-    print(f"🔍 DEBUG save_payment ВХОД:")
-    print(f"  user_id={user_id}")
-    print(f"  company_arc_id={company_arc_id}")
-    print(f"  amount={amount}")
-    print(f"  yookassa_id={yookassa_id}")
-    print(f"  status={status}")
-    
-    conn = None
     try:
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO payments (user_id, company_arc_id, amount, status, yookassa_payment_id)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, company_arc_id, amount, status, yookassa_id))
         
-        print(f"🔍 DEBUG: Проверяем структуру таблицы payments...")
-        
-        # Проверяем существует ли таблица
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'")
-        if not cursor.fetchone():
-            print(f"❌ DEBUG: Таблица payments не существует! Создаем...")
-            cursor.execute('''
-                CREATE TABLE payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    company_arc_id INTEGER NOT NULL,
-                    amount REAL NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    yookassa_payment_id TEXT UNIQUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    metadata TEXT
-                )
-            ''')
-            conn.commit()
-            print(f"✅ DEBUG: Таблица payments создана")
-        
-        # Проверяем колонки
-        cursor.execute("PRAGMA table_info(payments)")
-        columns = cursor.fetchall()
-        print(f"🔍 DEBUG: Колонки таблицы payments ({len(columns)}):")
-        for col in columns:
-            print(f"  - {col[1]} ({col[2]}) {'NOT NULL' if col[3] else ''}")
-        
-        # Проверяем нет ли уже такого платежа
-        cursor.execute("SELECT id FROM payments WHERE yookassa_payment_id = ?", (yookassa_id,))
-        existing = cursor.fetchone()
-        
-        if existing:
-            print(f"⚠️ DEBUG: Платеж с yookassa_id={yookassa_id} уже существует, обновляем...")
-            cursor.execute('''
-                UPDATE payments 
-                SET user_id = ?, company_arc_id = ?, amount = ?, status = ?
-                WHERE yookassa_payment_id = ?
-            ''', (user_id, company_arc_id, amount, status, yookassa_id))
-            payment_id = existing[0]
-        else:
-            print(f"🔍 DEBUG: Вставляем новый платеж...")
-            # Сохраняем платеж
-            cursor.execute('''
-                INSERT INTO payments (user_id, company_arc_id, amount, status, yookassa_payment_id)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, company_arc_id, amount, status, yookassa_id))
-            
-            payment_id = cursor.lastrowid
-        
+        payment_id = cursor.lastrowid
         conn.commit()
         
-        print(f"✅ DEBUG: Платеж сохранен: ID {payment_id}")
-        
-        # Проверяем что действительно сохранилось
-        cursor.execute('SELECT * FROM payments WHERE id = ?', (payment_id,))
-        saved = cursor.fetchone()
-        
-        if saved:
-            print(f"✅ DEBUG: Подтверждение сохранения:")
-            print(f"  DB ID: {saved[0]}")
-            print(f"  User ID: {saved[1]}")
-            print(f"  Company Arc ID: {saved[2]}")
-            print(f"  Amount: {saved[3]}")
-            print(f"  Status: {saved[4]}")
-            print(f"  Yookassa ID: {saved[5]}")
-        else:
-            print(f"❌ DEBUG: КРИТИЧЕСКАЯ ОШИБКА: платеж не найден после сохранения!")
-        
-        logger.info(f"✅ Платеж сохранен: ID {payment_id}, user={user_id}, company_arc={company_arc_id}, amount={amount}₽, yookassa={yookassa_id}")
+        print(f"✅ Платеж сохранен: ID={payment_id}, user={user_id}, company_arc={company_arc_id}")
         return payment_id
         
-    except sqlite3.IntegrityError as e:
-        print(f"❌ DEBUG: Ошибка целостности данных: {e}")
-        # Пробуем обновить существующую запись
-        try:
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE payments 
-                    SET user_id = ?, company_arc_id = ?, amount = ?, status = ?
-                    WHERE yookassa_payment_id = ?
-                ''', (user_id, company_arc_id, amount, status, yookassa_id))
-                conn.commit()
-                
-                cursor.execute("SELECT id FROM payments WHERE yookassa_payment_id = ?", (yookassa_id,))
-                existing = cursor.fetchone()
-                if existing:
-                    print(f"✅ DEBUG: Существующий платеж обновлен: ID {existing[0]}")
-                    return existing[0]
-        except Exception as e2:
-            print(f"❌ DEBUG: Ошибка при обновлении: {e2}")
-        return None
-        
     except Exception as e:
-        print(f"🚨 DEBUG: КРИТИЧЕСКАЯ ОШИБКА сохранения платежа: {e}")
-        import traceback
-        traceback.print_exc()
-        logger.error(f"🚨 Ошибка сохранения платежа: {e}", exc_info=True)
+        print(f"❌ Ошибка сохранения платежа: {e}")
         return None
-        
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def update_payment_status(yookassa_id, status):
     """Обновляет статус платежа для компании"""
@@ -3550,21 +3503,22 @@ def has_new_feedback(user_id):
     return result[0] > 0 if result else False
 
 def get_arcs_with_feedback(user_id):
-    """Возвращает части с ответами и кол-вом новых (по новой логике)"""
+    """Возвращает части с ответами и кол-вом новых"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
+    # ЗАМЕНИТЬ НА ЭТО:
     cursor.execute('''
-        SELECT ar.arc_id, ar.title,
-               COUNT(CASE WHEN upa.has_additional_comment = 1 AND upa.additional_comment_viewed = 0 THEN 1 END) as new_count,
-               COUNT(*) as total_count
-        FROM arcs ar
-        JOIN days d ON ar.arc_id = d.arc_id
-        JOIN assignments a ON d.day_id = a.day_id
-        JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id
+        SELECT 
+            1 as arc_id,  -- Фиксированный arc_id=1 для всех компаний
+            'Регулярный менеджмент(8 недель)' as title,
+            COUNT(CASE WHEN upa.has_additional_comment = 1 AND upa.additional_comment_viewed = 0 THEN 1 END) as new_count,
+            COUNT(*) as total_count
+        FROM user_progress_advanced upa
+        JOIN assignments a ON upa.assignment_id = a.assignment_id
+        JOIN days d ON a.day_id = d.day_id
         WHERE upa.user_id = ? AND upa.status = 'approved'
-        GROUP BY ar.arc_id
-        ORDER BY ar.order_num
+        GROUP BY 1
     ''', (user_id,))
     
     arcs = cursor.fetchall()
@@ -3572,11 +3526,11 @@ def get_arcs_with_feedback(user_id):
     return arcs
 
 def get_feedback_counts(user_id, arc_id):
-    """Возвращает количество новых и завершенных ответов по новой логике"""
+    """Возвращает количество новых и завершенных ответов"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # ★★ ИЗМЕНЕНИЕ: Новые ответы - задания с дополнительными комментариями, которые НЕ просмотрены
+    # ЗАМЕНИТЬ НА ЭТО:
     cursor.execute('''
         SELECT COUNT(*)
         FROM user_progress_advanced upa
@@ -3586,12 +3540,11 @@ def get_feedback_counts(user_id, arc_id):
           AND upa.status = 'approved'
           AND upa.has_additional_comment = 1
           AND upa.additional_comment_viewed = 0
-          AND d.arc_id = ?
-    ''', (user_id, arc_id))
+          AND d.arc_id = 1  -- Фиксированный arc_id=1
+    ''', (user_id,))
     
     new_count = cursor.fetchone()[0] or 0
     
-    # ★★ ИЗМЕНЕНИЕ: Завершенные - все approved задания, включая автоматически принятые
     cursor.execute('''
         SELECT COUNT(*)
         FROM user_progress_advanced upa
@@ -3599,8 +3552,8 @@ def get_feedback_counts(user_id, arc_id):
         JOIN days d ON a.day_id = d.day_id
         WHERE upa.user_id = ? 
           AND upa.status = 'approved'
-          AND d.arc_id = ?
-    ''', (user_id, arc_id))
+          AND d.arc_id = 1  -- Фиксированный arc_id=1
+    ''', (user_id,))
     
     completed_count = cursor.fetchone()[0] or 0
     
@@ -4773,14 +4726,24 @@ def create_company(name, join_key, start_date, end_date=None, tg_group_link=None
         # Проверяем есть ли стандартный тренинг (arc_id=1)
         cursor.execute('SELECT 1 FROM arcs WHERE arc_id = 1')
         if cursor.fetchone():
-            # Автоматически создаем company_arc для стандартного тренинга
-            cursor.execute('''
-                INSERT INTO company_arcs (company_id, arc_id, actual_start_date, actual_end_date)
-                VALUES (?, 1, ?, DATE(?, '+56 days'))
-            ''', (company_id, start_date, start_date))
-            
-            company_arc_id = cursor.lastrowid
-            print(f"✅ Создана компания: {name} (ID: {company_id}), арка: {company_arc_id}")
+            # Проверяем, есть ли уже запись с company_arc_id = 1
+            cursor.execute('SELECT 1 FROM company_arcs WHERE company_arc_id = 1')
+            if cursor.fetchone():
+                # Если уже есть, используем автоинкремент
+                cursor.execute('''
+                    INSERT INTO company_arcs (company_id, arc_id, actual_start_date, actual_end_date)
+                    VALUES (?, 1, ?, DATE(?, '+56 days'))
+                ''', (company_id, start_date, start_date))
+                company_arc_id = cursor.lastrowid
+                print(f"✅ Создана компания: {name} (ID: {company_id}), арка: {company_arc_id}")
+            else:
+                # Первая компания - явно вставляем с company_arc_id = 1
+                cursor.execute('''
+                    INSERT INTO company_arcs (company_arc_id, company_id, arc_id, actual_start_date, actual_end_date)
+                    VALUES (1, ?, 1, ?, DATE(?, '+56 days'))
+                ''', (company_id, start_date, start_date))
+                company_arc_id = 1
+                print(f"✅ Создана ПЕРВАЯ компания: {name} (ID: {company_id}), арка FIXED: {company_arc_id}")
         else:
             print(f"⚠️ Компания создана, но нет стандартного тренинга! arc_id=1 не найден")
             company_arc_id = None
@@ -5635,6 +5598,426 @@ def is_trial_access_active(user_id, company_arc_id):
         return False, 0
     finally:
         conn.close()
+
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ДОЛЖНОСТЯМИ ==========
+
+def add_user_position(user_id, company_id, position):
+    """Добавляет или обновляет должность пользователя в компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_positions (user_id, company_id, position, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (user_id, company_id, position))
+        
+        conn.commit()
+        print(f"✅ Должность '{position}' добавлена для пользователя {user_id} в компании {company_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка добавления должности: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_user_position(user_id, company_id):
+    """Получает должность пользователя в компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT position FROM user_positions 
+        WHERE user_id = ? AND company_id = ?
+    ''', (user_id, company_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else None
+
+
+def get_all_user_positions(company_id):
+    """Получает все должности пользователей в компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.user_id, u.fio, u.first_name, u.username, up.position
+        FROM users u
+        JOIN user_companies uc ON u.user_id = uc.user_id
+        LEFT JOIN user_positions up ON u.user_id = up.user_id AND up.company_id = ?
+        WHERE uc.company_id = ? AND uc.is_active = 1
+        ORDER BY up.position IS NULL, up.position
+    ''', (company_id, company_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    users = []
+    for row in results:
+        display_name = row[1] or row[2] or row[3] or f"Участник {row[0]}"
+        users.append({
+            'user_id': row[0],
+            'display_name': display_name,
+            'position': row[4] or 'Не указана'
+        })
+    
+    return users
+
+
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ОПИСАНИЕМ КОМПАНИИ ==========
+
+def update_company_description(company_id, description):
+    """Обновляет описание компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE companies SET description = ? WHERE company_id = ?
+        ''', (description, company_id))
+        
+        conn.commit()
+        print(f"✅ Описание компании {company_id} обновлено")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления описания: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_company_description(company_id):
+    """Получает описание компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT description FROM companies WHERE company_id = ?', (company_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result and result[0] else "Описание отсутствует"
+
+
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ СО СПИСКОМ ЗАДАЧ ==========
+
+def add_company_task(company_id, task_text, created_by):
+    """Добавляет новую задачу в список компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Получаем максимальный номер задачи
+        cursor.execute('''
+            SELECT MAX(task_number) FROM company_tasks WHERE company_id = ?
+        ''', (company_id,))
+        
+        max_num = cursor.fetchone()[0]
+        new_number = 1 if max_num is None else max_num + 1
+        
+        # Добавляем задачу
+        cursor.execute('''
+            INSERT INTO company_tasks (company_id, task_number, task_text, created_by)
+            VALUES (?, ?, ?, ?)
+        ''', (company_id, new_number, task_text, created_by))
+        
+        conn.commit()
+        print(f"✅ Задача #{new_number} добавлена в компанию {company_id}")
+        return new_number
+        
+    except Exception as e:
+        print(f"❌ Ошибка добавления задачи: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def delete_company_task(company_id, task_number):
+    """Удаляет задачу по номеру и перенумеровывает оставшиеся"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Удаляем задачу
+        cursor.execute('''
+            DELETE FROM company_tasks 
+            WHERE company_id = ? AND task_number = ?
+        ''', (company_id, task_number))
+        
+        if cursor.rowcount == 0:
+            print(f"❌ Задача #{task_number} не найдена")
+            return False
+        
+        # Перенумеровываем оставшиеся задачи
+        cursor.execute('''
+            SELECT task_id, task_number FROM company_tasks 
+            WHERE company_id = ? 
+            ORDER BY task_number
+        ''', (company_id,))
+        
+        tasks = cursor.fetchall()
+        
+        for idx, (task_id, old_number) in enumerate(tasks, 1):
+            if old_number != idx:
+                cursor.execute('''
+                    UPDATE company_tasks 
+                    SET task_number = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE task_id = ?
+                ''', (idx, task_id))
+        
+        conn.commit()
+        print(f"✅ Задача #{task_number} удалена, задачи перенумерованы")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления задачи: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_company_tasks(company_id):
+    """Получает список всех задач компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT task_number, task_text, created_at
+        FROM company_tasks 
+        WHERE company_id = ?
+        ORDER BY task_number
+    ''', (company_id,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    tasks = []
+    for row in results:
+        tasks.append({
+            'number': row[0],
+            'text': row[1],
+            'created_at': row[2]
+        })
+    
+    return tasks
+
+
+def get_company_tasks_count(company_id):
+    """Получает количество задач компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) FROM company_tasks WHERE company_id = ?
+    ''', (company_id,))
+    
+    count = cursor.fetchone()[0]
+    conn.close()
+    
+    return count
+
+
+# ========== ФУНКЦИИ ДЛЯ СТАТИСТИКИ КОМПАНИИ ==========
+
+def get_company_top_users(company_id, limit=3):
+    """Топ участников компании по проценту выполнения заданий"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем компанию и её арку
+    cursor.execute('''
+        SELECT ca.company_arc_id, ca.actual_start_date
+        FROM company_arcs ca
+        WHERE ca.company_id = ? AND ca.status = 'active'
+        LIMIT 1
+    ''', (company_id,))
+    
+    company_arc = cursor.fetchone()
+    if not company_arc:
+        conn.close()
+        return []
+    
+    company_arc_id, start_date = company_arc
+    
+    # Получаем всех активных участников компании
+    cursor.execute('''
+        SELECT u.user_id, u.fio, u.first_name, u.username
+        FROM users u
+        JOIN user_companies uc ON u.user_id = uc.user_id
+        WHERE uc.company_id = ? AND uc.is_active = 1
+    ''', (company_id,))
+    
+    users = cursor.fetchall()
+    
+    top_users = []
+    for user in users:
+        user_id = user[0]
+        display_name = user[1] or user[2] or user[3] or f"Участник {user_id}"
+        
+        # Проверяем доступ к компании
+        cursor.execute('''
+            SELECT 1 FROM user_arc_access 
+            WHERE user_id = ? AND company_arc_id = ?
+        ''', (user_id, company_arc_id))
+        
+        has_access = cursor.fetchone() is not None
+        
+        if has_access:
+            # Получаем статистику пользователя
+            from database import get_user_skip_statistics
+            stats = get_user_skip_statistics(user_id, company_arc_id)
+            
+            top_users.append({
+                'user_id': user_id,
+                'name': display_name,
+                'completion_rate': stats.get('completion_rate', 0),
+                'completed': stats.get('completed_assignments', 0),
+                'total': stats.get('total_assignments', 0),
+                'streak': stats.get('streak_days', 0)
+            })
+    
+    conn.close()
+    
+    # Сортируем по проценту выполнения и берем топ
+    top_users.sort(key=lambda x: x['completion_rate'], reverse=True)
+    return top_users[:limit]
+
+
+def get_company_users_with_stats(company_id):
+    """Список участников компании с должностями и статистикой"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем компанию и её арку
+    cursor.execute('''
+        SELECT ca.company_arc_id, ca.actual_start_date
+        FROM company_arcs ca
+        WHERE ca.company_id = ? AND ca.status = 'active'
+        LIMIT 1
+    ''', (company_id,))
+    
+    company_arc = cursor.fetchone()
+    if not company_arc:
+        conn.close()
+        return []
+    
+    company_arc_id, start_date = company_arc
+    
+    # ✅ ИСПРАВЛЕНИЕ: joined_at берем из user_companies, а не из users
+    cursor.execute('''
+        SELECT u.user_id, u.fio, u.first_name, u.username, 
+               uc.joined_at,  -- ← БЕРЕМ ИЗ user_companies
+               up.position
+        FROM users u
+        JOIN user_companies uc ON u.user_id = uc.user_id
+        LEFT JOIN user_positions up ON u.user_id = up.user_id AND up.company_id = ?
+        WHERE uc.company_id = ? AND uc.is_active = 1
+        ORDER BY uc.joined_at
+    ''', (company_id, company_id))
+    
+    users_data = cursor.fetchall()
+    
+    users_list = []
+    for row in users_data:
+        user_id = row[0]
+        display_name = row[1] or row[2] or row[3] or f"Участник {user_id}"
+        joined_at = row[4]  # ← теперь правильно
+        position = row[5] or 'Не указана'
+        
+        # Проверяем доступ
+        cursor.execute('''
+            SELECT 1 FROM user_arc_access 
+            WHERE user_id = ? AND company_arc_id = ?
+        ''', (user_id, company_arc_id))
+        
+        has_access = cursor.fetchone() is not None
+        
+        if has_access:
+            from database import get_user_skip_statistics
+            stats = get_user_skip_statistics(user_id, company_arc_id)
+            
+            users_list.append({
+                'user_id': user_id,
+                'name': display_name,
+                'position': position,
+                'joined_at': joined_at,
+                'completion_rate': stats.get('completion_rate', 0),
+                'completed': stats.get('completed_assignments', 0),
+                'total': stats.get('total_assignments', 0),
+                'streak': stats.get('streak_days', 0),
+                'current_day': stats.get('current_day', 0)
+            })
+    
+    conn.close()
+    return users_list
+
+
+def get_company_statistics_full(company_id):
+    """Полная статистика компании"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Основная информация о компании
+    cursor.execute('''
+        SELECT name, join_key, start_date, end_date, tg_group_link, description,
+               (SELECT COUNT(*) FROM user_companies WHERE company_id = ? AND is_active = 1) as user_count
+        FROM companies 
+        WHERE company_id = ?
+    ''', (company_id, company_id))
+    
+    company_info = cursor.fetchone()
+    if not company_info:
+        conn.close()
+        return None
+    
+    # Информация о тренинге
+    cursor.execute('''
+        SELECT company_arc_id, actual_start_date, actual_end_date
+        FROM company_arcs
+        WHERE company_id = ? AND status = 'active'
+        LIMIT 1
+    ''', (company_id,))
+    
+    arc_info = cursor.fetchone()
+    
+    # Получаем топ-3 участников
+    top_users = get_company_top_users(company_id, 3)
+    
+    # Получаем список задач
+    tasks = get_company_tasks(company_id)
+    
+    # Общая статистика выполнения
+    total_users = company_info[6]
+    
+    # Средний процент выполнения
+    users_with_stats = get_company_users_with_stats(company_id)
+    avg_completion = 0
+    if users_with_stats:
+        avg_completion = sum(u['completion_rate'] for u in users_with_stats) / len(users_with_stats)
+    
+    conn.close()
+    
+    return {
+        'company_id': company_id,
+        'name': company_info[0],
+        'join_key': company_info[1],
+        'start_date': company_info[2],
+        'end_date': company_info[3],
+        'tg_group_link': company_info[4],
+        'description': company_info[5] or 'Описание отсутствует',
+        'total_users': total_users,
+        'top_users': top_users,
+        'tasks': tasks,
+        'tasks_count': len(tasks),
+        'arc_id': arc_info[0] if arc_info else None,
+        'actual_start_date': arc_info[1] if arc_info else company_info[2],
+        'actual_end_date': arc_info[2] if arc_info else company_info[3],
+        'avg_completion': round(avg_completion, 1)
+    }
 
 
 

@@ -4921,3 +4921,920 @@ Traceback (most recent call last):
     raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
 telegram.error.NetworkError: httpx.RemoteProtocolError: Server disconnected without sending a response.
 2026-02-11 13:37:28,795 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 13:37:39,388 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 14:58:01,689 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 14:58:12,578 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:00:38,658 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:00:49,537 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:05:01,055 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:05:03,087 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-11 15:05:07,460 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-11 15:05:08,553 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-11 15:05:15,681 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:05:26,558 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:05:30,276 - __main__ - ERROR - Exception while handling an update: no such column: u.joined_at
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 597, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 11967, in company_profile_menu
+    stats = get_company_statistics_full(company_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 6088, in get_company_statistics_full
+    users_with_stats = get_company_users_with_stats(company_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\database.py", line 6003, in get_company_users_with_stats
+    cursor.execute('''
+    ~~~~~~~~~~~~~~^^^^
+        SELECT u.user_id, u.fio, u.first_name, u.username, u.joined_at,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        ORDER BY uc.joined_at
+        ^^^^^^^^^^^^^^^^^^^^^
+    ''', (company_id, company_id))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: u.joined_at
+2026-02-11 15:07:53,568 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:10:04,185 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:17:17,557 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 15:17:18,189 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=2, amount=10₽, yookassa=311e6aed-000f-5001-9000-1d19907595df
+2026-02-11 15:17:19,257 - __main__ - INFO - Создан платеж: user=918928334, company_arc=2, amount=10
+2026-02-11 15:17:53,264 - database - INFO - Статус платежа компании 311e6aed-000f-5001-9000-1d19907595df обновлен на 'succeeded'
+2026-02-11 15:25:42,675 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:26:53,298 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:30:03,093 - __main__ - INFO - Начало покупки: user=918928334, trial=True
+2026-02-11 15:34:14,296 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:34:25,200 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:44:29,798 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 15:44:30,452 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=2, amount=10₽, yookassa=311e714e-000f-5000-8000-1357bcfd6974
+2026-02-11 15:44:30,971 - __main__ - INFO - Создан платеж: user=918928334, company_arc=2, amount=10
+2026-02-11 15:44:59,739 - database - INFO - Статус платежа компании 311e714e-000f-5000-8000-1357bcfd6974 обновлен на 'succeeded'
+2026-02-11 15:45:39,058 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 15:52:14,871 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 15:53:17,333 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:54:28,271 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 15:56:38,914 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 15:56:39,614 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=2, amount=10₽, yookassa=311e7427-000f-5000-b000-155903058b96
+2026-02-11 15:56:40,786 - __main__ - INFO - Создан платеж: user=918928334, company_arc=2, amount=10
+2026-02-11 15:57:22,828 - database - INFO - Статус платежа компании 311e7427-000f-5000-b000-155903058b96 обновлен на 'succeeded'
+2026-02-11 16:06:43,550 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:06:54,424 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:11:53,674 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:12:04,216 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:12:25,026 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:12:27,609 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-11 16:12:32,361 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-11 16:12:40,372 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:13:50,990 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:14:48,831 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 16:14:49,538 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=2, amount=10₽, yookassa=311e7869-000f-5001-9000-185f524172cd
+2026-02-11 16:14:50,265 - __main__ - INFO - Создан платеж: user=918928334, company_arc=2, amount=10
+2026-02-11 16:15:19,824 - database - INFO - Статус платежа компании 311e7869-000f-5001-9000-185f524172cd обновлен на 'succeeded'
+2026-02-11 16:16:35,201 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:30:45,811 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-11 16:33:36,618 - __main__ - INFO - Начало покупки: user=918928334, trial=True
+2026-02-11 16:35:17,860 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-11 16:35:18,479 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=2, amount=10₽, yookassa=311e7d36-000f-5000-b000-163f7c7bdf25
+2026-02-11 16:35:19,397 - __main__ - INFO - Создан платеж: user=918928334, company_arc=2, amount=10
+2026-02-11 16:36:17,921 - database - INFO - Статус платежа компании 311e7d36-000f-5000-b000-163f7c7bdf25 обновлен на 'succeeded'
+2026-02-11 17:03:39,833 - __main__ - INFO - Начало покупки: user=417834474, trial=False
+2026-02-11 17:03:40,422 - database - INFO - ✅ Платеж сохранен: ID 2, user=417834474, company_arc=3, amount=10₽, yookassa=311e83dc-000f-5001-9000-1378a56e02a4
+2026-02-11 17:03:41,457 - __main__ - INFO - Создан платеж: user=417834474, company_arc=3, amount=10
+2026-02-11 17:05:30,468 - database - INFO - Статус платежа компании 311e83dc-000f-5001-9000-1378a56e02a4 обновлен на 'succeeded'
+2026-02-11 17:27:29,283 - __main__ - INFO - Начало покупки: user=417834474, trial=True
+2026-02-11 17:28:13,008 - __main__ - INFO - Начало покупки: user=417834474, trial=False
+2026-02-11 17:28:13,697 - database - INFO - ✅ Платеж сохранен: ID 3, user=417834474, company_arc=3, amount=10₽, yookassa=311e899d-000f-5000-b000-1dc34ab7ccec
+2026-02-11 17:28:15,250 - __main__ - INFO - Создан платеж: user=417834474, company_arc=3, amount=10
+2026-02-12 00:17:53,119 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 00:18:04,007 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 00:25:36,689 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 01:04:37,697 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:04:48,242 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:06:16,604 - __main__ - INFO - Начало покупки: user=918928334, trial=True
+2026-02-12 01:22:26,730 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:22:28,080 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-12 01:23:07,315 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:24:17,924 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:30:45,347 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 01:30:46,060 - database - INFO - ✅ Платеж сохранен: ID 1, user=918928334, company_arc=1, amount=10₽, yookassa=311efab6-000f-5001-8000-1e2a7681df39
+2026-02-12 01:30:46,173 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-12 01:31:28,513 - database - INFO - Статус платежа компании 311efab6-000f-5001-8000-1e2a7681df39 обновлен на 'succeeded'
+2026-02-12 01:34:06,604 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 01:34:07,260 - database - INFO - ✅ Платеж сохранен: ID 2, user=918928334, company_arc=1, amount=10₽, yookassa=311efb7f-000f-5001-8000-12d2e9cb470a
+2026-02-12 01:34:07,381 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-12 01:34:58,547 - database - INFO - Статус платежа компании 311efb7f-000f-5001-8000-12d2e9cb470a обновлен на 'succeeded'
+2026-02-12 01:42:58,955 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:44:09,567 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:46:26,585 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 01:46:27,495 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-12 01:54:03,050 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:55:13,651 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 01:56:04,196 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 01:56:05,104 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-12 01:56:39,486 - database - ERROR - Ошибка обновления статуса: no such column: completed_at
+2026-02-12 02:26:17,631 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 02:26:28,513 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 02:51:05,873 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 02:51:16,739 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 02:54:34,713 - __main__ - INFO - Начало покупки: user=918928334, trial=True
+2026-02-12 02:57:34,669 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5053, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5143, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:04:13,244 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:04:24,128 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:04:52,209 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5099, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5158, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:05:00,652 - __main__ - INFO - Начало покупки: user=918928334, trial=True
+2026-02-12 03:05:57,986 - __main__ - INFO - Начало покупки: user=918928334, trial=False
+2026-02-12 03:05:58,870 - __main__ - INFO - Создан платеж: user=918928334, company_arc=1, amount=10
+2026-02-12 03:06:27,855 - database - ERROR - Ошибка обновления статуса: no such column: completed_at
+2026-02-12 03:13:34,991 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5068, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5158, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:16:03,156 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:16:14,039 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:16:32,911 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5099, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5257, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:26:04,423 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:26:15,317 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:26:38,289 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5228, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5287, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:28:33,026 - __main__ - ERROR - Exception while handling an update: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5228, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5287, in show_user_arcs_access_callback
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_callbackquery.py", line 268, in edit_message_text
+    return await self._get_message().edit_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_message.py", line 4142, in edit_text
+    return await self.get_bot().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 1735, in edit_message_text
+    return await super().edit_message_text(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4463, in edit_message_text
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 634, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 819, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2026-02-12 03:30:49,491 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:31:00,358 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:31:04,148 - __main__ - ERROR - Exception while handling an update: name 'show_user_arcs_access_callback' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5162, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'show_user_arcs_access_callback' is not defined. Did you mean: 'show_user_arcs_access'?
+2026-02-12 03:31:22,769 - __main__ - ERROR - Exception while handling an update: name 'show_user_arcs_access_callback' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5122, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'show_user_arcs_access_callback' is not defined. Did you mean: 'show_user_arcs_access'?
+2026-02-12 03:31:42,132 - __main__ - ERROR - Exception while handling an update: name 'show_user_arcs_access_callback' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\RM_C_BOT\bot.py", line 5141, in handle_access_callback
+    await show_user_arcs_access_callback(query, context, user_id)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'show_user_arcs_access_callback' is not defined. Did you mean: 'show_user_arcs_access'?
+2026-02-12 03:34:07,007 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:34:17,894 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:37:18,255 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-02-12 03:37:29,134 - bot - INFO - === Бот запущен с логированием платежей ===
